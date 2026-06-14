@@ -1,0 +1,12 @@
+{
+  "_comment": "Active Polymarket BTC prediction markets. Obtain token IDs from the CLOB API GET /markets.",
+  "markets": [
+    {
+      "token_id":      "71321045679252212594626385532706912750332728571942532289631379312455583992563",
+      "strike_price":  70000.0,
+      "resolution_us": 1735689600000000,
+      "is_above":      true,
+      "_comment":      "Example: BTC > $70k by 2025-01-01 00:00 UTC. Replace with live market data."
+    }
+  ]
+}
