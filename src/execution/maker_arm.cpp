@@ -21,18 +21,23 @@ MakerArm::MakerArm(ClobClient&               clob,
     , nonce_mgr_(nonce_mgr), ss_(ss), config_(std::move(config))
 {}
 
-bool MakerArm::submit_side(uint8_t side, double price, double size_usdc,
+bool MakerArm::submit_side(uint8_t side, double price, Amount size_usdc,
                              std::string& order_id_out)
 {
     uint64_t maker_raw, taker_raw;
     if (side == 0) {
         // BUY: offer USDC, receive shares
-        maker_raw = static_cast<uint64_t>(size_usdc * 1e6);
-        taker_raw = (price > 0) ? static_cast<uint64_t>(size_usdc / price * 1e6) : 0;
+        // poly_units() gives exact 6-decimal integer — no FP conversion for USDC amount
+        maker_raw = static_cast<uint64_t>(size_usdc.poly_units());
+        taker_raw = (price > 0)
+            ? static_cast<uint64_t>(static_cast<double>(size_usdc.poly_units()) / price)
+            : 0;
     } else {
         // SELL: offer shares, receive USDC
-        maker_raw = (price > 0) ? static_cast<uint64_t>(size_usdc / price * 1e6) : 0;
-        taker_raw = static_cast<uint64_t>(size_usdc * 1e6);
+        maker_raw = (price > 0)
+            ? static_cast<uint64_t>(static_cast<double>(size_usdc.poly_units()) / price)
+            : 0;
+        taker_raw = static_cast<uint64_t>(size_usdc.poly_units());
     }
     if (maker_raw == 0 || taker_raw == 0) return false;
 
@@ -106,10 +111,12 @@ bool MakerArm::check_fill(const std::string& order_id, double entry_price,
     if (s.state != ClobClient::OrderState::FILLED) return false;
 
     entry_out.entry_price_poly   = s.avg_price > 0 ? s.avg_price : entry_price;
-    entry_out.shares             = config_.size_usdc / entry_out.entry_price_poly;
+    entry_out.shares             = config_.size_usdc.to_double() / entry_out.entry_price_poly;
     entry_out.hedge_entry_btc    = 0.0;  // no hedge on maker arm
     entry_out.hedge_qty_btc      = 0.0;
-    entry_out.initial_edge_value = config_.half_spread * entry_out.shares;  // expected profit
+    // expected profit = half_spread (per share) × shares = USDC value
+    entry_out.initial_edge_value = Amount::from_double(
+        config_.half_spread * entry_out.shares);
     entry_out.poly_order_id      = order_id;
     entry_out.binance_order_id   = "";
     entry_out.is_yes_long        = is_bid;

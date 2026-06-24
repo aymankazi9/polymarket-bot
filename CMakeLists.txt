@@ -15,7 +15,9 @@ endif()
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    add_compile_options(-O2 -march=native)
+    # ARM64 Graviton3 (t4g.medium, eu-west-1) — +crypto enables hardware AES acceleration
+    # for key decryption and keccak operations.  Replaces -march=native (CONTEXT_ADDENDUM A1.1).
+    add_compile_options(-O2 -march=armv8.2-a+crypto)
 elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_options(-O0 -g -fsanitize=address,undefined)
     add_link_options(-fsanitize=address,undefined)
@@ -75,6 +77,7 @@ set(BOT_SOURCES
     # data pipeline
     src/data/clock_sync.cpp
     src/data/feed_manager.cpp
+    src/data/market_scanner.cpp     # Stage 4 — auto-discovery (CONTEXT_ADDENDUM A2)
 
     # signal
     src/signal/likelihood.cpp
@@ -96,6 +99,7 @@ set(BOT_SOURCES
     src/infra/logger.cpp
     src/infra/metrics.cpp
     src/infra/heartbeat.cpp
+    src/infra/rpc_client.cpp        # Stage 4 — Alchemy primary + fallback (CONTEXT_ADDENDUM A1.2)
 )
 
 # ---------------------------------------------------------------------------
@@ -146,6 +150,7 @@ install(TARGETS polymarket-bot DESTINATION bin)
 # Summary
 # ---------------------------------------------------------------------------
 message(STATUS "Build type     : ${CMAKE_BUILD_TYPE}")
+message(STATUS "Target arch    : armv8.2-a+crypto (Graviton3 / eu-west-1)")
 message(STATUS "OpenSSL        : ${OPENSSL_VERSION}")
 message(STATUS "Boost          : ${Boost_VERSION}")
 message(STATUS "secp256k1 lib  : ${SECP256K1_LIB}")

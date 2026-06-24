@@ -6,7 +6,7 @@ namespace execution {
 
 void PositionManager::open(const EntryData& d) noexcept {
     data_            = d;
-    peak_pnl_        = 0.0;
+    peak_pnl_        = Amount::zero();
     trailing_active_ = false;
     open_            = true;
 }
@@ -14,11 +14,11 @@ void PositionManager::open(const EntryData& d) noexcept {
 void PositionManager::close() noexcept {
     open_            = false;
     trailing_active_ = false;
-    peak_pnl_        = 0.0;
+    peak_pnl_        = Amount::zero();
 }
 
-double PositionManager::combined_pnl_usdc(const signal::SharedState& ss) const noexcept {
-    if (!open_) return 0.0;
+Amount PositionManager::combined_pnl_usdc(const signal::SharedState& ss) const noexcept {
+    if (!open_) return Amount::zero();
 
     // Exit price for the Polymarket leg: best_bid if long YES, best_ask if long NO
     double poly_exit;
@@ -30,7 +30,7 @@ double PositionManager::combined_pnl_usdc(const signal::SharedState& ss) const n
     double poly_pnl    = (poly_exit - data_.entry_price_poly) * data_.shares;
     double binance_pnl = (data_.hedge_entry_btc - ss.btc_mid.load(std::memory_order_relaxed))
                        * data_.hedge_qty_btc;
-    return poly_pnl + binance_pnl;
+    return Amount::from_double(poly_pnl + binance_pnl);
 }
 
 PositionManager::ExitReason PositionManager::evaluate(
@@ -38,29 +38,32 @@ PositionManager::ExitReason PositionManager::evaluate(
 {
     if (!open_) return ExitReason::NONE;
 
-    double pnl = combined_pnl_usdc(ss);
+    Amount pnl = combined_pnl_usdc(ss);
 
     // 1. Hard stop
-    if (pnl < constants::HARD_STOP_MULTIPLE * data_.initial_edge_value)
+    Amount hard_stop = Amount::from_double(
+        constants::HARD_STOP_MULTIPLE * data_.initial_edge_value.to_double());
+    if (pnl < hard_stop)
         return ExitReason::HARD_STOP;
 
     // 2. Trailing stop
-    if (!trailing_active_ &&
-        pnl >= constants::TRAILING_PROFIT_TRIGGER * data_.initial_edge_value)
-    {
+    Amount trigger = Amount::from_double(
+        constants::TRAILING_PROFIT_TRIGGER * data_.initial_edge_value.to_double());
+    if (!trailing_active_ && pnl >= trigger) {
         trailing_active_ = true;
     }
     if (trailing_active_) {
-        peak_pnl_ = std::max(peak_pnl_, pnl);
-        if (peak_pnl_ > 0.0 &&
-            pnl < peak_pnl_ * (1.0 - constants::TRAILING_STOP_FRACTION))
-        {
-            return ExitReason::TRAILING_STOP;
+        if (pnl > peak_pnl_) peak_pnl_ = pnl;
+        if (peak_pnl_.is_positive()) {
+            Amount floor = Amount::from_double(
+                peak_pnl_.to_double() * (1.0 - constants::TRAILING_STOP_FRACTION));
+            if (pnl < floor)
+                return ExitReason::TRAILING_STOP;
         }
     }
 
     // 3. Early exit: break-even or better (after sunk entry cost)
-    if (pnl >= 0.0)
+    if (pnl >= Amount::zero())
         return ExitReason::EARLY_EXIT;
 
     return ExitReason::NONE;

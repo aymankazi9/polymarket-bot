@@ -85,7 +85,7 @@ std::string BinanceClient::hmac_hex(const std::string& data) const {
 BinanceClient::OrderResult BinanceClient::submit_order(
     const std::string& side, double quantity, double price)
 {
-    std::string params = "symbol=BTCUSDT"
+    std::string params = "symbol=BTCUSDC"
         "&side=" + side +
         "&type=LIMIT"
         "&timeInForce=IOC"
@@ -116,7 +116,7 @@ BinanceClient::OrderResult BinanceClient::submit_order(
 }
 
 bool BinanceClient::cancel_order(const std::string& order_id) {
-    std::string params = "symbol=BTCUSDT"
+    std::string params = "symbol=BTCUSDC"
         "&orderId=" + order_id +
         "&recvWindow=5000"
         "&timestamp=" + std::to_string(ts_ms());

@@ -116,14 +116,20 @@ bool parse_binance_depth(const json& data,
     if (bids.empty() && asks.empty())
         return false;
 
-    double bb = bids.empty() ? 0.0 : parse_double(bids[0][0].get<std::string>());
-    double ba = asks.empty() ? 0.0 : parse_double(asks[0][0].get<std::string>());
+    int nb = static_cast<int>(bids.size());
+    int na = static_cast<int>(asks.size());
 
-    // Top-5 quantities for OB imbalance
+    double bb = nb > 0 ? parse_double(bids[0][0].get<std::string>()) : 0.0;
+    double ba = na > 0 ? parse_double(asks[0][0].get<std::string>()) : 0.0;
+
+    // Fewer than 2 levels on either side = thin book; neutralise OB imbalance signal
+    bool low_depth = (nb < 2 || na < 2);
+
+    // Top-5 quantities for OB imbalance (only meaningful when !low_depth)
     std::array<double, 5> bqty{}, aqty{};
-    for (int i = 0; i < std::min(5, static_cast<int>(bids.size())); ++i)
+    for (int i = 0; i < std::min(5, nb); ++i)
         bqty[i] = parse_double(bids[i][1].get<std::string>());
-    for (int i = 0; i < std::min(5, static_cast<int>(asks.size())); ++i)
+    for (int i = 0; i < std::min(5, na); ++i)
         aqty[i] = parse_double(asks[i][1].get<std::string>());
 
     out.timestamp_us  = exchange_us + clock_offset_us;
@@ -131,8 +137,9 @@ bool parse_binance_depth(const json& data,
     out.best_bid      = bb;
     out.best_ask      = ba;
     out.mid           = (bb + ba) / 2.0;
-    out.ob_imbalance  = compute_ob_imbalance(bqty, aqty);
+    out.ob_imbalance  = low_depth ? 0.0 : compute_ob_imbalance(bqty, aqty);
     out.last_trade    = 0.0;
+    out.low_depth     = low_depth;
     return true;
 }
 
@@ -152,6 +159,7 @@ bool parse_binance_trade(const json& data,
     out.mid           = 0.0;
     out.ob_imbalance  = 0.0;
     out.last_trade    = price;
+    out.low_depth     = false;  // trade events carry no OB data; not a depth fault
     return true;
 }
 
@@ -211,6 +219,7 @@ bool parse_coinbase_ticker(const json& j,
             out.mid          = (bb > 0.0 && ba > 0.0) ? (bb + ba) / 2.0 : pr;
             out.ob_imbalance = obi;
             out.last_trade   = pr;   // price = last matched trade
+            out.low_depth    = false;  // ticker channel provides 1 level by design; not a fault
             return true;
         }
     }
@@ -238,16 +247,20 @@ bool parse_polymarket_book(const json& j,
     const auto& bids = j["bids"];
     const auto& asks = j["asks"];
 
-    double bb = bids.empty() ? 0.0 :
-        parse_double(bids[0]["price"].get<std::string>());
-    double ba = asks.empty() ? 0.0 :
-        parse_double(asks[0]["price"].get<std::string>());
+    int nb = static_cast<int>(bids.size());
+    int na = static_cast<int>(asks.size());
 
-    // OB imbalance from top-5 size levels
+    // Fewer than 2 levels on either side = thin market; neutralise imbalance signal
+    bool low_depth = (nb < 2 || na < 2);
+
+    double bb = nb > 0 ? parse_double(bids[0]["price"].get<std::string>()) : 0.0;
+    double ba = na > 0 ? parse_double(asks[0]["price"].get<std::string>()) : 0.0;
+
+    // OB imbalance from top-5 size levels (only meaningful when !low_depth)
     std::array<double, 5> bsizes{}, asizes{};
-    for (int i = 0; i < std::min(5, static_cast<int>(bids.size())); ++i)
+    for (int i = 0; i < std::min(5, nb); ++i)
         bsizes[i] = parse_double(bids[i]["size"].get<std::string>());
-    for (int i = 0; i < std::min(5, static_cast<int>(asks.size())); ++i)
+    for (int i = 0; i < std::min(5, na); ++i)
         asizes[i] = parse_double(asks[i]["size"].get<std::string>());
 
     out.timestamp_us = exchange_us + clock_offset_us;
@@ -255,8 +268,9 @@ bool parse_polymarket_book(const json& j,
     out.best_bid     = bb;
     out.best_ask     = ba;
     out.mid          = (bb > 0.0 && ba > 0.0) ? (bb + ba) / 2.0 : 0.0;
-    out.ob_imbalance = compute_ob_imbalance(bsizes, asizes);
+    out.ob_imbalance = low_depth ? 0.0 : compute_ob_imbalance(bsizes, asizes);
     out.last_trade   = 0.0;
+    out.low_depth    = low_depth;
     return true;
 }
 
@@ -287,8 +301,9 @@ bool parse_polymarket_price_change(const json& j,
     out.best_bid     = bb;
     out.best_ask     = ba;
     out.mid          = (bb > 0.0 && ba > 0.0) ? (bb + ba) / 2.0 : (bb + ba);
-    out.ob_imbalance = 0.0;   // delta event; no depth info
+    out.ob_imbalance = 0.0;    // delta event; no depth info
     out.last_trade   = 0.0;
+    out.low_depth    = false;  // price_change carries no OB snapshot; not a depth fault
     return true;
 }
 
@@ -359,6 +374,11 @@ int64_t FeedManager::clock_offset_us(Source s) const noexcept {
     return clock_sync_.offset_us(s);
 }
 
+bool FeedManager::both_cex_dead() const noexcept {
+    return fault_level(Source::BINANCE)  == FeedFaultLevel::EMERGENCY_FLATTEN
+        && fault_level(Source::COINBASE) == FeedFaultLevel::EMERGENCY_FLATTEN;
+}
+
 double FeedManager::last_funding_rate() const noexcept {
     return last_funding_rate_.load(std::memory_order_relaxed);
 }
@@ -375,6 +395,26 @@ void FeedManager::record_received(Source s) noexcept {
 }
 
 void FeedManager::push_tick(Tick t) noexcept {
+    int si = static_cast<int>(t.source);
+
+    // Track consecutive low-depth ticks per source.
+    // 30 consecutive → escalate to at least DEGRADED to widen maker spread.
+    // Coinbase ticks always have low_depth=false so they never trigger this path.
+    if (t.low_depth) {
+        if (++consecutive_low_depth_[si] == 30) {
+            FeedFaultLevel cur = fault_level_[si].load(std::memory_order_relaxed);
+            if (cur == FeedFaultLevel::NOMINAL) {
+                fault_level_[si].store(FeedFaultLevel::DEGRADED,
+                                       std::memory_order_release);
+                std::fprintf(stderr,
+                    "feed_manager: source %d → DEGRADED (30 consecutive low-depth ticks)\n",
+                    si);
+            }
+        }
+    } else {
+        consecutive_low_depth_[si] = 0;
+    }
+
     if (!ring_.push(t)) {
         // Ring buffer full — consumer (Thread 2) is lagging.  Log and drop.
         std::fprintf(stderr, "feed_manager: ring buffer full — tick dropped\n");
@@ -492,17 +532,18 @@ void FeedManager::run(
     ssl_ctx.set_verify_mode(ssl::verify_peer);
     ssl_ctx.set_default_verify_paths();
 
-    // Exponential backoff helper: 1s → 2s → … → 30s
+    // Exponential backoff helper: 100ms → 200ms → … → 30s (per-feed, not global)
     auto next_delay = [](int attempt) {
         return std::chrono::milliseconds(
-            std::min(1000 * (1 << std::min(attempt, 4)), 30000));
+            std::min(100 * (1 << std::min(attempt, 8)), 30000));
     };
 
     // ------------------------------------------------------------------
     // Binance combined stream
     // ------------------------------------------------------------------
+    // BTCUSDC USDC-margined perpetual futures on fstream.binance.com (CONTEXT_ADDENDUM A6)
     const std::string binance_path =
-        "/stream?streams=btcusdt@depth20@100ms/btcusdt@aggTrade/btcusdt@markPrice@1s";
+        "/stream?streams=btcusdc@depth20@100ms/btcusdc@aggTrade/btcusdc@markPrice@1s";
 
     asio::spawn(ioc, [&](asio::yield_context yield) {
         for (int attempt = 0; running_.load(); ++attempt) {

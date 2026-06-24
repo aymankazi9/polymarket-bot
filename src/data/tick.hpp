@@ -36,8 +36,9 @@ struct Tick {
     double  best_bid;
     double  best_ask;
     double  mid;
-    double  ob_imbalance;   // (bid_qty - ask_qty) / (bid_qty + ask_qty), top-5 levels
+    double  ob_imbalance;   // (bid_qty - ask_qty) / (bid_qty + ask_qty), top-5 levels; 0 when low_depth
     double  last_trade;     // last matched price; 0 if not a trade event
+    bool    low_depth;      // true when OB has <2 bid or <2 ask levels; imbalance is neutralised
 };
 
 } // namespace data

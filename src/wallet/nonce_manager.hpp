@@ -45,9 +45,6 @@ public:
     uint64_t current() const noexcept { return nonce_.load(std::memory_order_relaxed); }
 
 private:
-    uint64_t query_rpc(const std::string& rpc_url,
-                       const std::string& wallet_hex) const;
-
     std::atomic<uint64_t> nonce_{0};
 };
 

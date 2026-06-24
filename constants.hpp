@@ -1,10 +1,30 @@
 #pragma once
 #include <cstdint>
+#include "src/types/amount.hpp"
 
 // All trading constants. Every threshold, limit, and tunable parameter lives here.
 // Tune by recompile only — no runtime overrides, no env-var fallbacks.
 
 namespace constants {
+
+// ---------------------------------------------------------------------------
+// RPC endpoints  (CONTEXT_ADDENDUM A1.2)
+// Primary: Alchemy free tier — 300M compute units/month on Polygon, permanent.
+// Fallback: public polygon-rpc.com — rate-limited, used only if primary fails.
+// ---------------------------------------------------------------------------
+// Replace <YOUR_KEY> with your Alchemy project key before building.
+inline constexpr char RPC_PRIMARY[]  = "https://polygon-mainnet.g.alchemy.com/v2/<YOUR_KEY>";
+inline constexpr char RPC_FALLBACK[] = "https://polygon-rpc.com";
+constexpr int         RPC_TIMEOUT_MS = 3000;  // retry on fallback after 3s
+
+// ---------------------------------------------------------------------------
+// CEX instrument  (CONTEXT_ADDENDUM A6)
+// BTCUSDC perpetual futures, USDC-margined.
+// NOT BTCUSDT (USDT basis risk) and NOT BTCUSD (coin-margined).
+// ---------------------------------------------------------------------------
+inline constexpr char BINANCE_HEDGE_SYMBOL[] = "BTCUSDC";
+inline constexpr char BINANCE_FUTURES_BASE[] = "https://fapi.binance.com";
+inline constexpr char BINANCE_FUTURES_WS[]   = "wss://fstream.binance.com";
 
 // ---------------------------------------------------------------------------
 // Bayesian signal engine
@@ -50,10 +70,10 @@ constexpr double E_MIN_TAKER_CENTS         = FEE_TAKER_CENTS
 // Position sizing
 // ---------------------------------------------------------------------------
 constexpr double KELLY_FRACTION           = 0.25;   // quarter-Kelly; increase only after 200+ live trades
-constexpr double MAX_TRADE_USDC           = 200.0;
+const     Amount MAX_TRADE_USDC           = Amount::from_double(200.0);
 constexpr double MAX_HEDGE_FRACTION       = 0.05;   // 5% of bankroll per Binance hedge
-constexpr double MAX_TOTAL_EXPOSURE_USDC  = 400.0;
-constexpr double MAX_MAKER_QUOTE_USDC     = 100.0;  // per side
+const     Amount MAX_TOTAL_EXPOSURE_USDC  = Amount::from_double(400.0);
+const     Amount MAX_MAKER_QUOTE_USDC     = Amount::from_double(100.0);  // per side
 constexpr int    KELLY_LIVE_TRADE_MIN     = 200;    // trades before raising Kelly fraction
 
 // ---------------------------------------------------------------------------
@@ -127,8 +147,8 @@ inline constexpr char USDC_POLYGON[]     = "0x2791Bca1f2de4661ED88A30C99A7a9449A
 // Go-live ramp  (deploy with reduced caps, double after 48h of good behaviour)
 // ---------------------------------------------------------------------------
 namespace ramp {
-constexpr double INITIAL_MAX_TRADE_USDC          = 20.0;
-constexpr double INITIAL_MAX_TOTAL_EXPOSURE_USDC = 40.0;
+const Amount INITIAL_MAX_TRADE_USDC          = Amount::from_double(20.0);
+const Amount INITIAL_MAX_TOTAL_EXPOSURE_USDC = Amount::from_double(40.0);
 } // namespace ramp
 
 } // namespace constants

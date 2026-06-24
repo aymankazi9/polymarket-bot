@@ -1,5 +1,6 @@
 #include "order_state_machine.hpp"
 #include "../risk/sizing.hpp"
+#include "../types/amount.hpp"
 #include "../wallet/eip712.hpp"
 
 #include <chrono>
@@ -37,6 +38,8 @@ void OrderStateMachine::run() noexcept {
             flatten_flag_.store(false, std::memory_order_relaxed);
         }
         evaluate();
+        // Exit when the market has been resolved and all positions cleared
+        if (time_remaining_s() < -60.0 && !pos_mgr_.is_open()) break;
         std::this_thread::sleep_for(milliseconds(1));
     }
 }
@@ -50,8 +53,21 @@ void OrderStateMachine::emergency_flatten() noexcept {
 }
 
 void OrderStateMachine::evaluate() noexcept {
+    double t_rem = time_remaining_s();
+
+    // Internal fallback triggers — mirror what scanner callbacks do,
+    // in case we hit a deadline between scanner poll intervals.
+    if (t_rem <= 120.0 && !entries_stopped_.load(std::memory_order_relaxed))
+        entries_stopped_.store(true, std::memory_order_release);
+    if (t_rem <= 45.0 && !quotes_cancelled_.load(std::memory_order_relaxed))
+        quotes_cancelled_.store(true, std::memory_order_release);
+    if (t_rem <= 30.0 && !positions_closed_.load(std::memory_order_relaxed))
+        positions_closed_.store(true, std::memory_order_release);
+    if (t_rem <= 10.0 && !force_closed_.load(std::memory_order_relaxed))
+        force_closed_.store(true, std::memory_order_release);
+
     // Abort all trading when market has expired
-    if (time_remaining_s() < 0.0) {
+    if (t_rem < 0.0) {
         if (pos_mgr_.is_open()) close_position(/*market_order=*/true);
         return;
     }
@@ -73,9 +89,8 @@ double OrderStateMachine::time_remaining_s() const noexcept {
 }
 
 double OrderStateMachine::compute_e_min_taker() const noexcept {
-    // Dynamic half-spread: use live Polymarket spread when available.
-    double best_bid = ss_.poly_best_bid.load(std::memory_order_relaxed);
-    double best_ask = ss_.poly_best_ask.load(std::memory_order_relaxed);
+    double best_bid  = ss_.poly_best_bid.load(std::memory_order_relaxed);
+    double best_ask  = ss_.poly_best_ask.load(std::memory_order_relaxed);
     double live_half = (best_ask - best_bid) / 2.0;
     double half_spread = (live_half > 0.001 && live_half < 0.5)
         ? live_half
@@ -88,11 +103,14 @@ double OrderStateMachine::compute_e_min_taker() const noexcept {
 }
 
 void OrderStateMachine::handle_idle() noexcept {
-    // Close to expiry — ensure hedge is wound down at T-30s
-    if (time_remaining_s() < constants::HEDGE_CLOSE_BEFORE_EXPIRY_S) {
-        if (pos_mgr_.is_open()) close_position(/*market_order=*/false);
+    // Safety: if somehow IDLE with a stale open position, clean it up
+    if (pos_mgr_.is_open()) {
+        close_position(/*market_order=*/false);
         return;
     }
+
+    // No new taker entries after T-120s
+    if (entries_stopped_.load(std::memory_order_relaxed)) return;
 
     if (ss_.open_position_count.load(std::memory_order_relaxed)
             >= constants::MAX_OPEN_POSITIONS) return;
@@ -100,27 +118,29 @@ void OrderStateMachine::handle_idle() noexcept {
     double p_true   = ss_.p_true.load(std::memory_order_acquire);
     double p_market = ss_.p_market.load(std::memory_order_acquire);
     double edge     = p_true - p_market;
-
-    double e_min = compute_e_min_taker();
+    double e_min    = compute_e_min_taker();
 
     if (edge >= e_min && !taker_arm_.in_cooldown()) {
         transition(OSMState::TAKER_EVAL);
         return;
     }
 
-    // Maker arm: regime SIDEWAYS and small positive edge
+    // No new maker quotes after T-45s
+    if (quotes_cancelled_.load(std::memory_order_relaxed)) return;
+
     auto regime = ss_.regime.load(std::memory_order_relaxed);
     if (regime == signal::MarketRegime::SIDEWAYS && std::fabs(edge) < e_min) {
-        double fair = p_true;
-        if (maker_arm_.quote(fair)) {
+        if (maker_arm_.quote(p_true)) {
             transition(OSMState::MAKER_QUOTED);
         }
     }
 }
 
 void OrderStateMachine::handle_taker_eval() noexcept {
-    double bankroll = ss_.bankroll_usdc.load(std::memory_order_relaxed);
-    double exposure = ss_.total_exposure_usdc.load(std::memory_order_relaxed);
+    // SharedState stores monetary values as double atomics for lock-free access.
+    // Convert to Amount at the boundary before passing into typed execution code.
+    Amount bankroll = Amount::from_double(ss_.bankroll_usdc.load(std::memory_order_relaxed));
+    Amount exposure = Amount::from_double(ss_.total_exposure_usdc.load(std::memory_order_relaxed));
 
     PositionManager::EntryData entry{};
     auto result = taker_arm_.fire(bankroll, exposure, entry);
@@ -144,6 +164,18 @@ void OrderStateMachine::handle_taker_eval() noexcept {
 }
 
 void OrderStateMachine::handle_position_open() noexcept {
+    // T-10s: forced market close takes priority
+    if (force_closed_.load(std::memory_order_relaxed)) {
+        close_position(/*market_order=*/true);
+        return;
+    }
+
+    // T-30s: close taker positions with limit order
+    if (positions_closed_.load(std::memory_order_relaxed)) {
+        close_position(/*market_order=*/false);
+        return;
+    }
+
     auto reason = pos_mgr_.evaluate(ss_);
     if (reason != PositionManager::ExitReason::NONE) {
         std::fprintf(stderr, "osm: exit triggered, reason=%d\n", (int)reason);
@@ -153,7 +185,21 @@ void OrderStateMachine::handle_position_open() noexcept {
 }
 
 void OrderStateMachine::handle_maker_quoted() noexcept {
-    // Re-check taker edge — if it's now >= E_min, cancel quotes and fire taker
+    // T-45s: cancel all open maker quotes
+    if (quotes_cancelled_.load(std::memory_order_relaxed)) {
+        maker_arm_.cancel_all();
+        // Poll once to capture any fill that raced with the cancel
+        PositionManager::EntryData entry{};
+        auto status = maker_arm_.manage(entry);
+        if (status == MakerStatus::FILLED_BID || status == MakerStatus::FILLED_ASK) {
+            handle_late_fill(entry);
+        } else {
+            transition(OSMState::IDLE);
+        }
+        return;
+    }
+
+    // Re-check taker edge — if >= E_min, cancel quotes and fire taker
     double p_true   = ss_.p_true.load(std::memory_order_acquire);
     double p_market = ss_.p_market.load(std::memory_order_acquire);
     double edge     = p_true - p_market;
@@ -186,13 +232,40 @@ void OrderStateMachine::handle_maker_quoted() noexcept {
     }
 }
 
+// A5.2: fill arrived after T-45s quote cancellation.
+// Do NOT hedge with Binance — too close to resolution for the hedge to be worth it.
+// Exit immediately at break-even if the book allows; otherwise hold to resolution.
+void OrderStateMachine::handle_late_fill(const PositionManager::EntryData& entry) noexcept {
+    PositionManager::EntryData unhedged = entry;
+    unhedged.hedge_qty_btc = 0.0;  // no Binance hedge for late fills
+
+    pos_mgr_.open(unhedged);
+    ss_.total_exposure_usdc.fetch_add(
+        unhedged.shares * unhedged.entry_price_poly,
+        std::memory_order_relaxed);
+    ss_.open_position_count.fetch_add(1, std::memory_order_relaxed);
+
+    // Break-even: best bid covers entry price plus taker exit fee
+    double best_bid        = ss_.poly_best_bid.load(std::memory_order_relaxed);
+    double break_even_exit = unhedged.entry_price_poly
+                           + (constants::FEE_TAKER_CENTS / 100.0);
+
+    if (best_bid >= break_even_exit) {
+        std::fprintf(stderr, "osm[%s]: late fill, break-even exit available (bid=%.4f >= %.4f)\n",
+                     config_.condition_id.c_str(), best_bid, break_even_exit);
+        close_position(/*market_order=*/false);
+    } else {
+        std::fprintf(stderr, "osm[%s]: late fill, holding to resolution (bid=%.4f < %.4f)\n",
+                     config_.condition_id.c_str(), best_bid, break_even_exit);
+        transition(OSMState::POSITION_OPEN);
+    }
+}
+
 void OrderStateMachine::handle_closing() noexcept {
-    // Wait for close orders to confirm; for simplicity poll the poly order
     if (!close_poly_order_id_.empty()) {
         auto s = clob_.get_status(close_poly_order_id_);
         if (s.state == ClobClient::OrderState::FILLED ||
             s.state == ClobClient::OrderState::CANCELLED) {
-            // Account for fill in shared state
             double usdc_released = pos_mgr_.data().shares
                                  * pos_mgr_.data().entry_price_poly;
             ss_.total_exposure_usdc.fetch_sub(usdc_released,
@@ -204,7 +277,6 @@ void OrderStateMachine::handle_closing() noexcept {
             transition(OSMState::IDLE);
         }
     } else {
-        // No tracking — just clear state
         double usdc_released = pos_mgr_.data().shares
                              * pos_mgr_.data().entry_price_poly;
         ss_.total_exposure_usdc.fetch_sub(usdc_released,
@@ -223,7 +295,6 @@ void OrderStateMachine::close_position(bool market_order) noexcept {
 
     const auto& d = pos_mgr_.data();
 
-    // Close Polymarket leg: submit SELL IOC at current best bid (or slightly below)
     double close_price = ss_.poly_best_bid.load(std::memory_order_relaxed);
     if (close_price <= 0.0) close_price = 0.01;
 
@@ -257,7 +328,7 @@ void OrderStateMachine::close_position(bool market_order) noexcept {
         close_poly_order_id_ = result.order_id;
     }
 
-    // Close Binance hedge
+    // Close Binance hedge (skip if late fill — hedge_qty_btc was zeroed)
     if (d.hedge_qty_btc >= 0.001) {
         std::string close_side = config_.is_above ? "BUY" : "SELL";
         double btc_price = ss_.btc_mid.load(std::memory_order_relaxed);

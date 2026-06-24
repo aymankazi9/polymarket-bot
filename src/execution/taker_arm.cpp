@@ -33,8 +33,8 @@ void TakerArm::reset_cooldown() noexcept {
     last_entry_ = {};
 }
 
-TakerResult TakerArm::fire(double bankroll_usdc,
-                             double current_exposure_usdc,
+TakerResult TakerArm::fire(Amount bankroll,
+                             Amount current_exposure,
                              PositionManager::EntryData& entry_out)
 {
     double p_true   = ss_.p_true.load(std::memory_order_acquire);
@@ -42,20 +42,23 @@ TakerResult TakerArm::fire(double bankroll_usdc,
     double btc_mid  = ss_.btc_mid.load(std::memory_order_relaxed);
 
     // Size the Polymarket leg
-    double usdc_size = risk::kelly_size_usdc(p_true, p_market, bankroll_usdc,
-                                              current_exposure_usdc);
-    if (usdc_size < 1.0) return TakerResult::SKIPPED;
+    Amount usdc_size = risk::kelly_size_usdc(p_true, p_market, bankroll, current_exposure);
+    if (usdc_size < Amount::from_double(1.0)) return TakerResult::SKIPPED;
 
     // Hedge: short BTC perp (bot is long YES = long BTC direction on above markets)
-    double hedge_qty = risk::hedge_btc_qty(usdc_size, btc_mid, bankroll_usdc);
+    double hedge_qty = risk::hedge_btc_qty(usdc_size, btc_mid, bankroll);
     if (hedge_qty < 0.001) return TakerResult::SKIPPED;  // below Binance minimum
 
     // Build Polymarket IOC order
     double poly_ask = ss_.poly_best_ask.load(std::memory_order_relaxed);
     if (poly_ask <= 0.0 || poly_ask >= 1.0) return TakerResult::ERROR;
 
-    uint64_t maker_raw = static_cast<uint64_t>(usdc_size * 1e6);
-    uint64_t taker_raw = static_cast<uint64_t>(usdc_size / poly_ask * 1e6);
+    // poly_units() gives exact 6-decimal integer — no floating-point conversion for USDC
+    uint64_t maker_raw = static_cast<uint64_t>(usdc_size.poly_units());
+    // shares = USDC / price — division by double is unavoidable here
+    uint64_t taker_raw = (poly_ask > 0.0)
+        ? static_cast<uint64_t>(static_cast<double>(usdc_size.poly_units()) / poly_ask)
+        : 0;
     if (taker_raw == 0) return TakerResult::ERROR;
 
     int64_t now_s = duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
@@ -95,7 +98,7 @@ TakerResult TakerArm::fire(double bankroll_usdc,
     auto bn_result = binance_.submit_order(hedge_side, hedge_qty, hedge_price);
 
     // ---- Handle leg outcomes ----
-    bool poly_filled   = !poly_result.order_id.empty();
+    bool poly_filled    = !poly_result.order_id.empty();
     bool binance_filled = bn_result.success && bn_result.executed_qty >= hedge_qty * 0.99;
 
     if (!poly_filled && !binance_filled) {
@@ -137,7 +140,7 @@ TakerResult TakerArm::fire(double bankroll_usdc,
     entry_out.shares             = static_cast<double>(taker_raw) / 1e6;
     entry_out.hedge_entry_btc    = bn_result.avg_price > 0 ? bn_result.avg_price : btc_mid;
     entry_out.hedge_qty_btc      = bn_result.executed_qty;
-    entry_out.initial_edge_value = (p_true - p_market) * usdc_size;
+    entry_out.initial_edge_value = Amount::from_double((p_true - p_market) * usdc_size.to_double());
     entry_out.poly_order_id      = poly_result.order_id;
     entry_out.binance_order_id   = bn_result.order_id;
     entry_out.is_yes_long        = true;

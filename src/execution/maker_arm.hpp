@@ -5,6 +5,7 @@
 #include "../wallet/key_manager.hpp"
 #include "../wallet/clob_auth.hpp"
 #include "../wallet/nonce_manager.hpp"
+#include "../types/amount.hpp"
 #include "../constants.hpp"
 #include <chrono>
 #include <string>
@@ -25,8 +26,8 @@ namespace execution {
 
 struct MakerConfig {
     std::string  token_id;      // YES token ID (decimal string)
-    double       half_spread;   // half-spread in USDC cents per share (default 0.5¢ = 0.005)
-    double       size_usdc;     // per-side quote size
+    double       half_spread;   // half-spread as price fraction per share (e.g. 0.005 = 0.5¢)
+    Amount       size_usdc;     // per-side quote size in USDC
 };
 
 enum class MakerStatus {
@@ -61,7 +62,7 @@ public:
     }
 
 private:
-    bool submit_side(uint8_t side, double price, double size_usdc,
+    bool submit_side(uint8_t side, double price, Amount size_usdc,
                      std::string& order_id_out);
     bool check_fill(const std::string& order_id, double entry_price,
                     bool is_bid, PositionManager::EntryData& entry_out);

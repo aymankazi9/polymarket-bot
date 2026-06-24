@@ -5,6 +5,7 @@
 #include "maker_arm.hpp"
 #include "position_manager.hpp"
 #include "../signal/shared_state.hpp"
+#include "../types/amount.hpp"
 #include "../constants.hpp"
 #include "../wallet/key_manager.hpp"
 #include "../wallet/clob_auth.hpp"
@@ -38,18 +39,19 @@ enum class OSMState {
 
 struct OSMConfig {
     // Market identity
-    std::string  token_id;     // YES token decimal string
+    std::string  condition_id;  // Polymarket condition ID (for lifecycle callbacks)
+    std::string  token_id;      // YES token decimal string
     double       strike_price;
     int64_t      resolution_us;
-    bool         is_above;     // true → YES wins if BTC > strike
+    bool         is_above;      // true → YES wins if BTC > strike
 
     // REST endpoints (defaults point at Polymarket / Binance mainnet)
     std::string clob_base_url    = "https://clob.polymarket.com";
     std::string binance_base_url = "https://fapi.binance.com";
 
     // Maker arm parameters
-    double maker_half_spread_usdc = 0.005;  // 0.5¢
-    double maker_size_usdc        = constants::MAX_MAKER_QUOTE_USDC;
+    double maker_half_spread_usdc = 0.005;  // 0.5¢ as price fraction
+    Amount maker_size_usdc        = constants::MAX_MAKER_QUOTE_USDC;
 };
 
 class OrderStateMachine {
@@ -67,6 +69,14 @@ public:
     // Kill-switch: close all open positions and halt.  Called by Thread 4.
     void emergency_flatten() noexcept;
 
+    // Lifecycle notifications — called by the scanner callback (any thread).
+    // Each sets the corresponding atomic flag; the OSM loop acts on it at next tick.
+    void notify_stop_entries()    noexcept { entries_stopped_.store(true,   std::memory_order_release); }
+    void notify_cancel_quotes()   noexcept { quotes_cancelled_.store(true,  std::memory_order_release); }
+    void notify_close_positions() noexcept { positions_closed_.store(true,  std::memory_order_release); }
+    void notify_force_close()     noexcept { force_closed_.store(true,      std::memory_order_release); }
+
+    const std::string& condition_id() const noexcept { return config_.condition_id; }
     OSMState state() const noexcept { return state_.load(std::memory_order_relaxed); }
 
 private:
@@ -81,6 +91,7 @@ private:
 
     void transition(OSMState next) noexcept;
     void close_position(bool market_order) noexcept;
+    void handle_late_fill(const PositionManager::EntryData& entry) noexcept;
 
     double time_remaining_s() const noexcept;
     double compute_e_min_taker() const noexcept;
@@ -101,6 +112,12 @@ private:
     std::atomic<OSMState> state_{OSMState::IDLE};
     std::atomic<bool>     stop_flag_{false};
     std::atomic<bool>     flatten_flag_{false};
+
+    // Lifecycle flags set by scanner callbacks (notify_* methods above)
+    std::atomic<bool>     entries_stopped_{false};
+    std::atomic<bool>     quotes_cancelled_{false};
+    std::atomic<bool>     positions_closed_{false};
+    std::atomic<bool>     force_closed_{false};
 
     // Closing leg tracking
     std::string close_poly_order_id_;

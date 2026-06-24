@@ -6,6 +6,7 @@
 #include "../wallet/key_manager.hpp"
 #include "../wallet/clob_auth.hpp"
 #include "../wallet/nonce_manager.hpp"
+#include "../types/amount.hpp"
 #include "../constants.hpp"
 #include <atomic>
 #include <chrono>
@@ -46,8 +47,8 @@ public:
              TakerConfig           config);
 
     // Returns SUCCESS and populates `entry_out` on a clean two-leg fill.
-    TakerResult fire(double bankroll_usdc,
-                     double current_exposure_usdc,
+    TakerResult fire(Amount bankroll,
+                     Amount current_exposure,
                      PositionManager::EntryData& entry_out);
 
     // Minimum interval between taker entries on the same market.

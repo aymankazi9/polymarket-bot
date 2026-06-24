@@ -38,8 +38,8 @@ public:
     // poly_token_ids: YES and NO token IDs for each active market.
     // Reconnects automatically on disconnection.
     void run(const std::vector<std::string>& poly_token_ids,
-             const std::string& binance_ws_host   = "stream.binance.com",
-             const std::string& binance_ws_port   = "9443",
+             const std::string& binance_ws_host   = "fstream.binance.com",
+             const std::string& binance_ws_port   = "443",
              const std::string& coinbase_ws_host  = "advanced-trade-ws.coinbase.com",
              const std::string& coinbase_ws_port  = "443",
              const std::string& polymarket_ws_host = "ws-subscriptions-clob.polymarket.com",
@@ -51,6 +51,11 @@ public:
     FeedFaultLevel fault_level(Source s) const noexcept;
     int64_t        last_received_us(Source s) const noexcept;
     int64_t        clock_offset_us(Source s)  const noexcept;
+
+    // True only when BOTH Binance AND Coinbase are at EMERGENCY_FLATTEN.
+    // Polymarket dying alone does not satisfy this condition.
+    // Watchdog reads this to decide whether to trigger a global halt.
+    bool both_cex_dead() const noexcept;
 
     // Auxiliary signals for the Bayesian engine (from Binance markPrice stream)
     double last_funding_rate() const noexcept;
@@ -70,6 +75,9 @@ private:
     TickBuffer&  ring_;
     ClockSync    clock_sync_;
     std::vector<std::string> poly_token_ids_;
+
+    // Consecutive low-depth tick counter per source — Thread 1 only, no atomics needed.
+    int consecutive_low_depth_[SOURCE_COUNT]{};
 
     std::atomic<bool> running_{false};
 

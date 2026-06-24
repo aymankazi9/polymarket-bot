@@ -1,6 +1,7 @@
 #pragma once
 #include "../signal/shared_state.hpp"
 #include "../constants.hpp"
+#include "../types/amount.hpp"
 #include <string>
 
 // Tracks one open two-leg position (Polymarket + Binance perp) and evaluates
@@ -23,14 +24,18 @@ public:
     enum class ExitReason { NONE, HARD_STOP, TRAILING_STOP, EARLY_EXIT, RESOLUTION };
 
     struct EntryData {
-        double      entry_price_poly;   // USDC per share (Polymarket fill price)
-        double      shares;             // YES token shares held
-        double      hedge_entry_btc;    // BTC perp entry price
-        double      hedge_qty_btc;      // BTC perp quantity (bot is short)
-        double      initial_edge_value; // edge * usdc_spent at entry
+        double      entry_price_poly;   // USDC per share / probability (0-1, not monetary)
+        double      shares;             // YES token quantity (not monetary)
+        double      hedge_entry_btc;    // BTC perp entry price (not monetary)
+        double      hedge_qty_btc;      // BTC perp quantity (not monetary)
+        Amount      initial_edge_value; // edge × usdc_spent at entry (USDC)
         std::string poly_order_id;
         std::string binance_order_id;
         bool        is_yes_long;        // true = long YES, false = long NO
+
+        EntryData() : entry_price_poly(0.0), shares(0.0), hedge_entry_btc(0.0),
+                      hedge_qty_btc(0.0), initial_edge_value(Amount::zero()),
+                      is_yes_long(false) {}
     };
 
     PositionManager() = default;
@@ -42,14 +47,14 @@ public:
     // Read current SharedState and evaluate exit conditions.
     ExitReason evaluate(const signal::SharedState& ss) noexcept;
 
-    double combined_pnl_usdc(const signal::SharedState& ss) const noexcept;
+    Amount combined_pnl_usdc(const signal::SharedState& ss) const noexcept;
 
     const EntryData& data() const noexcept { return data_; }
 
 private:
     bool      open_             = false;
     EntryData data_{};
-    double    peak_pnl_         = 0.0;
+    Amount    peak_pnl_         = Amount::zero();
     bool      trailing_active_  = false;
 };
 

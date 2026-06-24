@@ -7,7 +7,7 @@
 // All signed requests use HMAC-SHA256 over the query string, with the
 // binance_secret from KeyManager::Credentials as the key.
 //
-// Price and quantity precision for BTCUSDT futures:
+// Price and quantity precision for BTCUSDC futures:
 //   price step:    $0.10  (2 decimal places, rounded to nearest $0.10)
 //   quantity step: 0.001  (3 decimal places, floored to nearest 0.001 BTC)
 //
@@ -28,7 +28,7 @@ public:
     BinanceClient(std::string api_key, std::string secret,
                   std::string base_url = "https://fapi.binance.com");
 
-    // Submit a LIMIT IOC order on BTCUSDT perpetual futures.
+    // Submit a LIMIT IOC order on BTCUSDC perpetual futures.
     // side:  "BUY" or "SELL"
     // Returns immediately; IOC fills or cancels at the exchange.
     OrderResult submit_order(const std::string& side,
