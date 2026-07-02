@@ -13,7 +13,7 @@ namespace constants {
 // Fallback: public polygon-rpc.com — rate-limited, used only if primary fails.
 // ---------------------------------------------------------------------------
 // Replace <YOUR_KEY> with your Alchemy project key before building.
-inline constexpr char RPC_PRIMARY[]  = "https://polygon-mainnet.g.alchemy.com/v2/<YOUR_KEY>";
+inline constexpr char RPC_PRIMARY[]  = "https://polygon-mainnet.g.alchemy.com/v2/GDGDDWXXD03eSte0IseXw";
 inline constexpr char RPC_FALLBACK[] = "https://polygon-rpc.com";
 constexpr int         RPC_TIMEOUT_MS = 3000;  // retry on fallback after 3s
 
