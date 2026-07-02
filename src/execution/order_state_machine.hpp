@@ -6,7 +6,7 @@
 #include "position_manager.hpp"
 #include "../signal/shared_state.hpp"
 #include "../types/amount.hpp"
-#include "../constants.hpp"
+#include "../../constants.hpp"
 #include "../wallet/key_manager.hpp"
 #include "../wallet/clob_auth.hpp"
 #include "../wallet/nonce_manager.hpp"

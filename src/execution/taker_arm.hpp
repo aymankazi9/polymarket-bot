@@ -7,7 +7,7 @@
 #include "../wallet/clob_auth.hpp"
 #include "../wallet/nonce_manager.hpp"
 #include "../types/amount.hpp"
-#include "../constants.hpp"
+#include "../../constants.hpp"
 #include <atomic>
 #include <chrono>
 #include <string>
