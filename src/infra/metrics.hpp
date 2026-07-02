@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <vector>
 
 // Prometheus metrics endpoint — localhost:METRICS_PORT (9090).
 //

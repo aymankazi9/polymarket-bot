@@ -133,7 +133,6 @@ add_executable(bt-runner
     tools/bt_runner/main.cpp
     src/signal/likelihood.cpp
     src/signal/regime.cpp
-    src/signal/bayesian_engine.cpp
     src/data/clock_sync.cpp
 )
 

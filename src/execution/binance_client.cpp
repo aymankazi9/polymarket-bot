@@ -41,7 +41,7 @@ static std::string fmt_qty(double q) {
     return buf;
 }
 
-static std::string url_encode(const std::string& s) {
+[[maybe_unused]] static std::string url_encode(const std::string& s) {
     std::string r;
     r.reserve(s.size() * 3);
     for (unsigned char c : s) {

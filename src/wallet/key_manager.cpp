@@ -200,7 +200,7 @@ void KeyManager::load(std::string_view key_file_path) {
     uint8_t rand_seed[32];
     if (RAND_bytes(rand_seed, 32) != 1)
         throw std::runtime_error("key_manager: RAND_bytes for context seed failed");
-    secp256k1_context_randomize(ctx_, rand_seed);
+    (void)secp256k1_context_randomize(ctx_, rand_seed);
     OPENSSL_cleanse(rand_seed, sizeof(rand_seed));
 
     if (!secp256k1_ec_seckey_verify(ctx_, privkey_))

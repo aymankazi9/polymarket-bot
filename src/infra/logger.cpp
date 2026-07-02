@@ -20,7 +20,7 @@ std::string Logger::now_iso8601() {
     auto ms   = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
     std::tm utc{};
     gmtime_r(&tt, &utc);
-    char buf[32];
+    char buf[64];
     std::snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d.%03lldZ",
         utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday,
         utc.tm_hour, utc.tm_min, utc.tm_sec, (long long)ms);

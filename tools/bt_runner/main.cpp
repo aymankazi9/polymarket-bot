@@ -12,7 +12,7 @@
 
 #include <cstdio>
 
-int main(int argc, char* argv[]) {
+int main() {
     std::fprintf(stderr, "bt-runner: not yet implemented\n");
     return 1;
 }
