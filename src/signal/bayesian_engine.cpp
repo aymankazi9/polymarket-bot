@@ -6,7 +6,7 @@
 #include <cmath>
 #include <thread>
 
-namespace signal {
+namespace signals {
 
 BayesianEngine::BayesianEngine(data::TickBuffer&        ring,
                                 SharedState&             state,
@@ -129,4 +129,4 @@ double BayesianEngine::compute_aux_log_adj(const data::Tick& tick) noexcept {
     return config_.is_above ? total : -total;
 }
 
-} // namespace signal
+} // namespace signals

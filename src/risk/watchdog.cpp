@@ -22,7 +22,7 @@ static int64_t now_us_wall() {
         system_clock::now().time_since_epoch()).count();
 }
 
-RiskWatchdog::RiskWatchdog(signal::SharedState&         ss,
+RiskWatchdog::RiskWatchdog(signals::SharedState&         ss,
                              std::vector<FlattenCallback> flatten_all,
                              double                       initial_bankroll_usdc)
     : ss_(ss)

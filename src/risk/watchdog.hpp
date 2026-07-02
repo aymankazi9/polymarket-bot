@@ -30,7 +30,7 @@ class RiskWatchdog {
 public:
     using FlattenCallback = std::function<void()>;
 
-    RiskWatchdog(signal::SharedState&          ss,
+    RiskWatchdog(signals::SharedState&          ss,
                  std::vector<FlattenCallback>  flatten_all,
                  double                        initial_bankroll_usdc);
 
@@ -46,7 +46,7 @@ private:
     void record_btc(double price, int64_t ts_us) noexcept;
     void trip(const char* reason) noexcept;
 
-    signal::SharedState&         ss_;
+    signals::SharedState&         ss_;
     std::vector<FlattenCallback> flatten_cbs_;
     std::atomic<bool>            stop_flag_{false};
 

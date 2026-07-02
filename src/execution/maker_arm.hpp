@@ -44,7 +44,7 @@ public:
              const wallet::KeyManager& km,
              const wallet::ClobAuth&   auth,
              wallet::NonceManager&     nonce_mgr,
-             signal::SharedState&      ss,
+             signals::SharedState&      ss,
              MakerConfig               config);
 
     // Submit initial quotes around fair_price.
@@ -71,7 +71,7 @@ private:
     const wallet::KeyManager& km_;
     const wallet::ClobAuth&   auth_;
     wallet::NonceManager&     nonce_mgr_;
-    signal::SharedState&      ss_;
+    signals::SharedState&      ss_;
     MakerConfig               config_;
 
     std::string  bid_order_id_;

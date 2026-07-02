@@ -76,7 +76,7 @@ void Logger::position_closed(double entry_price, double exit_price,
 }
 
 void Logger::circuit_breaker(const std::string& reason,
-                               const signal::SharedState& ss)
+                               const signals::SharedState& ss)
 {
     char buf[512];
     std::snprintf(buf, sizeof(buf),

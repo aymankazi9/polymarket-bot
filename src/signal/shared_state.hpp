@@ -9,7 +9,7 @@
 // Use memory_order_release on writes and memory_order_acquire on reads
 // where causality matters; relaxed suffices for gauge-style reads.
 
-namespace signal {
+namespace signals {
 
 enum class MarketRegime : uint8_t {
     SIDEWAYS  = 0,  // realized_vol_60s < 0.15% — maker arm eligible
@@ -48,4 +48,4 @@ struct SharedState {
     SharedState& operator=(const SharedState&) = delete;
 };
 
-} // namespace signal
+} // namespace signals

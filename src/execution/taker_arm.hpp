@@ -43,7 +43,7 @@ public:
              const wallet::KeyManager&   km,
              const wallet::ClobAuth&     auth,
              wallet::NonceManager&       nonce_mgr,
-             signal::SharedState&        ss,
+             signals::SharedState&        ss,
              TakerConfig           config);
 
     // Returns SUCCESS and populates `entry_out` on a clean two-leg fill.
@@ -61,7 +61,7 @@ private:
     const wallet::KeyManager&   km_;
     const wallet::ClobAuth&     auth_;
     wallet::NonceManager&       nonce_mgr_;
-    signal::SharedState&        ss_;
+    signals::SharedState&        ss_;
     TakerConfig                 config_;
     std::chrono::steady_clock::time_point last_entry_{};
 };

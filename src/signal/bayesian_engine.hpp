@@ -1,17 +1,13 @@
 #pragma once
 #include "shared_state.hpp"
 #include "regime.hpp"
-#include "../data/ring_buffer.hpp"
-#include "../data/tick.hpp"
+#include "../data/feed_manager.hpp"
 #include "../../constants.hpp"
 #include <atomic>
 #include <cstdint>
 #include <string>
 
-// Forward-declare to keep Boost.Beast/Asio headers out of this header.
-namespace data { class FeedManager; }
-
-namespace signal {
+namespace signals {
 
 // Configuration for one active Polymarket prediction market.
 struct MarketConfig {
@@ -62,4 +58,4 @@ private:
     int64_t last_reset_us_ = 0;    // timestamp of last prior reset
 };
 
-} // namespace signal
+} // namespace signals

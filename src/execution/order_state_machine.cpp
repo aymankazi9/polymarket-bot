@@ -12,7 +12,7 @@ namespace execution {
 
 using namespace std::chrono;
 
-OrderStateMachine::OrderStateMachine(signal::SharedState&      ss,
+OrderStateMachine::OrderStateMachine(signals::SharedState&      ss,
                                       const wallet::KeyManager& km,
                                       wallet::ClobAuth&         auth,
                                       wallet::NonceManager&     nonce_mgr,
@@ -129,7 +129,7 @@ void OrderStateMachine::handle_idle() noexcept {
     if (quotes_cancelled_.load(std::memory_order_relaxed)) return;
 
     auto regime = ss_.regime.load(std::memory_order_relaxed);
-    if (regime == signal::MarketRegime::SIDEWAYS && std::fabs(edge) < e_min) {
+    if (regime == signals::MarketRegime::SIDEWAYS && std::fabs(edge) < e_min) {
         if (maker_arm_.quote(p_true)) {
             transition(OSMState::MAKER_QUOTED);
         }

@@ -56,7 +56,7 @@ struct OSMConfig {
 
 class OrderStateMachine {
 public:
-    OrderStateMachine(signal::SharedState&      ss,
+    OrderStateMachine(signals::SharedState&      ss,
                       const wallet::KeyManager& km,
                       wallet::ClobAuth&         auth,
                       wallet::NonceManager&     nonce_mgr,
@@ -96,7 +96,7 @@ private:
     double time_remaining_s() const noexcept;
     double compute_e_min_taker() const noexcept;
 
-    signal::SharedState&      ss_;
+    signals::SharedState&      ss_;
     const wallet::KeyManager& km_;
     wallet::ClobAuth&         auth_;
     wallet::NonceManager&     nonce_mgr_;

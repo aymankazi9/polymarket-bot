@@ -30,7 +30,7 @@ public:
                           double pnl_usdc, const std::string& reason);
 
     // Circuit breaker / fault
-    void circuit_breaker(const std::string& reason, const signal::SharedState& ss);
+    void circuit_breaker(const std::string& reason, const signals::SharedState& ss);
     void feed_fault(const std::string& source, int tier);
 
     // Generic key/value log

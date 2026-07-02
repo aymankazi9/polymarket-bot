@@ -45,9 +45,9 @@ public:
     bool is_open() const noexcept { return open_; }
 
     // Read current SharedState and evaluate exit conditions.
-    ExitReason evaluate(const signal::SharedState& ss) noexcept;
+    ExitReason evaluate(const signals::SharedState& ss) noexcept;
 
-    Amount combined_pnl_usdc(const signal::SharedState& ss) const noexcept;
+    Amount combined_pnl_usdc(const signals::SharedState& ss) const noexcept;
 
     const EntryData& data() const noexcept { return data_; }
 

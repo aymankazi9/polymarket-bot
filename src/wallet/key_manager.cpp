@@ -14,6 +14,7 @@
 
 #include <cerrno>
 #include <cstdio>
+#include <iostream>
 #include <cstdlib>      // aligned_alloc / free
 #include <cstring>
 #include <fstream>

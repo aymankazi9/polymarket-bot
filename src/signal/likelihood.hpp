@@ -14,7 +14,7 @@
 //
 // No Boost. student_t_cdf uses a custom regularised incomplete beta function.
 
-namespace signal {
+namespace signals {
 
 // ---------------------------------------------------------------------------
 // student_t_cdf: P(T ≤ t) for a t-distribution with `nu` degrees of freedom.
@@ -69,4 +69,4 @@ private:
     bool   loaded_ = false;
 };
 
-} // namespace signal
+} // namespace signals

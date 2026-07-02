@@ -17,7 +17,7 @@ void PositionManager::close() noexcept {
     peak_pnl_        = Amount::zero();
 }
 
-Amount PositionManager::combined_pnl_usdc(const signal::SharedState& ss) const noexcept {
+Amount PositionManager::combined_pnl_usdc(const signals::SharedState& ss) const noexcept {
     if (!open_) return Amount::zero();
 
     // Exit price for the Polymarket leg: best_bid if long YES, best_ask if long NO
@@ -34,7 +34,7 @@ Amount PositionManager::combined_pnl_usdc(const signal::SharedState& ss) const n
 }
 
 PositionManager::ExitReason PositionManager::evaluate(
-    const signal::SharedState& ss) noexcept
+    const signals::SharedState& ss) noexcept
 {
     if (!open_) return ExitReason::NONE;
 

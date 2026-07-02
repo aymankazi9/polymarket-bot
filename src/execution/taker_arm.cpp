@@ -17,7 +17,7 @@ TakerArm::TakerArm(ClobClient&                 clob,
                     const wallet::KeyManager&   km,
                     const wallet::ClobAuth&     auth,
                     wallet::NonceManager&       nonce_mgr,
-                    signal::SharedState&        ss,
+                    signals::SharedState&        ss,
                     TakerConfig                 config)
     : clob_(clob), binance_(binance), km_(km), auth_(auth)
     , nonce_mgr_(nonce_mgr), ss_(ss), config_(std::move(config))

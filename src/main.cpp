@@ -22,6 +22,7 @@
 
 #include <curl/curl.h>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -45,7 +46,7 @@ static void signal_handler(int) {
 // ---------------------------------------------------------------------------
 // Hex-encode wallet address for RPC
 // ---------------------------------------------------------------------------
-static std::string to_hex_address(const std::vector<uint8_t>& addr) {
+static std::string to_hex_address(const std::array<uint8_t, 20>& addr) {
     static const char HEX[] = "0123456789abcdef";
     std::string out = "0x";
     out.reserve(2 + addr.size() * 2);
@@ -70,7 +71,7 @@ using ThreadMap = std::unordered_map<std::string, std::thread>;
 // ---------------------------------------------------------------------------
 static void sync_osms_with_scanner(
     data::MarketScanner& scanner,
-    signal::SharedState& ss,
+    signals::SharedState& ss,
     wallet::KeyManager&  km,
     wallet::ClobAuth&    clob_auth,
     wallet::NonceManager& nonce_mgr,
@@ -184,7 +185,7 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- Shared state + ring buffer ----
-    signal::SharedState ss;
+    signals::SharedState ss;
     ss.bankroll_usdc.store(
         constants::ramp::INITIAL_MAX_TOTAL_EXPOSURE_USDC.to_double() * 5.0,
         std::memory_order_relaxed);
@@ -261,7 +262,7 @@ int main(int argc, char* argv[]) {
 
     // ---- Thread 2: BayesianEngine (uses first discovered market for config) ----
     // Limitation: one engine per ring buffer. Multi-market requires fan-out.
-    signal::MarketConfig engine_cfg{};
+    signals::MarketConfig engine_cfg{};
     scanner.with_markets([&](const auto& markets) {
         if (!markets.empty()) {
             const auto& am = markets.begin()->second;
@@ -271,7 +272,7 @@ int main(int argc, char* argv[]) {
             engine_cfg.is_above      = am.is_above;
         }
     });
-    signal::BayesianEngine engine(ring, ss, feed_manager, engine_cfg);
+    signals::BayesianEngine engine(ring, ss, feed_manager, engine_cfg);
     std::thread t2([&]{ engine.run(); });
 
     // ---- Thread 4: RiskWatchdog (single callback flattens all OSMs) ----

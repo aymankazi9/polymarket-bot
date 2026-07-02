@@ -1,7 +1,7 @@
 #include "regime.hpp"
 #include <cmath>
 
-namespace signal {
+namespace signals {
 
 void RollingVolState::update(int64_t timestamp_us, double price) noexcept {
     if (price <= 0.0) return;
@@ -58,4 +58,4 @@ MarketRegime classify_regime(double vol) noexcept {
     return MarketRegime::SPIKE;
 }
 
-} // namespace signal
+} // namespace signals

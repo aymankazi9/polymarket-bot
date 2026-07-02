@@ -12,7 +12,7 @@
 // thresholds in constants.hpp. Thread 2 calls this after each vol update and
 // stores the result in SharedState::regime.
 
-namespace signal {
+namespace signals {
 
 class RollingVolState {
 public:
@@ -49,4 +49,4 @@ private:
 // Map realized vol (decimal fraction) to a MarketRegime.
 MarketRegime classify_regime(double realized_vol_60s) noexcept;
 
-} // namespace signal
+} // namespace signals

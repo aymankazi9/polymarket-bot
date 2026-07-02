@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace signal {
+namespace signals {
 
 namespace {
 
@@ -191,4 +191,4 @@ double LookupTable::lookup(double btc_price, double strike,
     return table_[row][col];
 }
 
-} // namespace signal
+} // namespace signals
