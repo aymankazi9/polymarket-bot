@@ -41,7 +41,7 @@ endif()
 find_package(OpenSSL REQUIRED)
 
 # Boost — header-only Asio + Beast; link against Boost::system for error_code
-find_package(Boost REQUIRED COMPONENTS system)
+find_package(Boost REQUIRED COMPONENTS system coroutine context)
 
 # libcurl (CLOB REST + Binance REST)
 find_package(CURL REQUIRED)
@@ -116,6 +116,8 @@ target_link_libraries(polymarket-bot PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
     Boost::system
+    Boost::coroutine
+    Boost::context
     CURL::libcurl
     nlohmann_json::nlohmann_json
     ${SECP256K1_LIB}
