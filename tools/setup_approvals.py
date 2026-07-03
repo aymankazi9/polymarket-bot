@@ -19,8 +19,9 @@ import sys
 # ---------------------------------------------------------------------------
 # Configuration — replace <YOUR_KEY> with your Alchemy project key
 # ---------------------------------------------------------------------------
-ALCHEMY_URL      = "https://polygon-mainnet.g.alchemy.com/v2/<YOUR_KEY>"
+ALCHEMY_URL      = "https://polygon-mainnet.g.alchemy.com/v2/GDGDDWXXD03eSte0IseXw"
 CTF_EXCHANGE     = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+CONDITION_TOKENS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 NEG_RISK_ADAPTER = "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"
 USDC_POLYGON     = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
 MAX_UINT256      = 2**256 - 1
@@ -48,7 +49,7 @@ def main():
     print(f"MATIC balance:  {w3.from_wei(w3.eth.get_balance(account.address), 'ether')}")
 
     usdc = w3.eth.contract(address=Web3.to_checksum_address(USDC_POLYGON), abi=USDC_ABI)
-    ctf  = w3.eth.contract(address=Web3.to_checksum_address(CTF_EXCHANGE),  abi=CTF_ABI)
+    ctf  = w3.eth.contract(address=Web3.to_checksum_address(CONDITION_TOKENS),  abi=CTF_ABI)
 
     nonce = w3.eth.get_transaction_count(account.address, "pending")
 
@@ -59,7 +60,7 @@ def main():
     ).build_transaction({
         "from":                 account.address,
         "nonce":                nonce,
-        "maxFeePerGas":         w3.to_wei("100", "gwei"),
+        "maxFeePerGas":         w3.to_wei("500", "gwei"),
         "maxPriorityFeePerGas": w3.to_wei("30",  "gwei"),
         "chainId":              137,
     })
@@ -77,7 +78,7 @@ def main():
     ).build_transaction({
         "from":                 account.address,
         "nonce":                nonce + 1,
-        "maxFeePerGas":         w3.to_wei("100", "gwei"),
+        "maxFeePerGas":         w3.to_wei("500", "gwei"),
         "maxPriorityFeePerGas": w3.to_wei("30",  "gwei"),
         "chainId":              137,
     })
