@@ -118,7 +118,7 @@ bool MakerArm::check_fill(const std::string& order_id, double entry_price,
     entry_out.initial_edge_value = Amount::from_double(
         config_.half_spread * entry_out.shares);
     entry_out.poly_order_id      = order_id;
-    entry_out.binance_order_id   = "";
+    entry_out.coinbase_order_id  = "";
     entry_out.is_yes_long        = is_bid;
     return true;
 }

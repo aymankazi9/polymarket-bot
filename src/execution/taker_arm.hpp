@@ -1,6 +1,6 @@
 #pragma once
 #include "clob_client.hpp"
-#include "binance_client.hpp"
+#include "coinbase_client.hpp"
 #include "position_manager.hpp"
 #include "../signal/shared_state.hpp"
 #include "../wallet/key_manager.hpp"
@@ -14,19 +14,19 @@
 
 namespace execution {
 
-// Fires a two-leg IOC taker entry: Polymarket CLOB + Binance perp hedge.
+// Fires a two-leg IOC taker entry: Polymarket CLOB + Coinbase perp hedge.
 //
 // Flow (CONTEXT.md §5.2):
-//   1. Compute Kelly size + Binance hedge quantity.
+//   1. Compute Kelly size + Coinbase hedge quantity.
 //   2. Build and sign Polymarket limit-IOC order.
 //   3. Submit Polymarket order → get order ID.
-//   4. Immediately submit Binance IOC hedge.
+//   4. Immediately submit Coinbase IOC hedge.
 //   5. Poll both for fill within ~1s.
 //   6. If either leg unfilled: cancel/market-unwind the filled leg, return FAILED.
 //   7. If both filled: populate EntryData, return SUCCESS.
 //
 // Thread 3 calls fire() from inside the OrderStateMachine loop.
-// ClobClient and BinanceClient are owned by OrderStateMachine and shared.
+// ClobClient and CoinbaseClient are owned by OrderStateMachine and shared.
 
 struct TakerConfig {
     std::string  token_id;       // YES token ID (decimal string)
@@ -38,13 +38,13 @@ enum class TakerResult { SUCCESS, SKIPPED, LEG_FAIL, ERROR };
 
 class TakerArm {
 public:
-    TakerArm(ClobClient&           clob,
-             BinanceClient&        binance,
+    TakerArm(ClobClient&                 clob,
+             CoinbaseClient&             coinbase,
              const wallet::KeyManager&   km,
              const wallet::ClobAuth&     auth,
              wallet::NonceManager&       nonce_mgr,
-             signals::SharedState&        ss,
-             TakerConfig           config);
+             signals::SharedState&       ss,
+             TakerConfig                 config);
 
     // Returns SUCCESS and populates `entry_out` on a clean two-leg fill.
     TakerResult fire(Amount bankroll,
@@ -57,7 +57,7 @@ public:
 
 private:
     ClobClient&                 clob_;
-    BinanceClient&              binance_;
+    CoinbaseClient&             coinbase_;
     const wallet::KeyManager&   km_;
     const wallet::ClobAuth&     auth_;
     wallet::NonceManager&       nonce_mgr_;

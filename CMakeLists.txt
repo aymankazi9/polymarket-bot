@@ -86,7 +86,8 @@ set(BOT_SOURCES
 
     # execution
     src/execution/clob_client.cpp
-    src/execution/binance_client.cpp
+    src/execution/binance_client.cpp   # kept for reference / future use
+    src/execution/coinbase_client.cpp
     src/execution/position_manager.cpp
     src/execution/taker_arm.cpp
     src/execution/maker_arm.cpp

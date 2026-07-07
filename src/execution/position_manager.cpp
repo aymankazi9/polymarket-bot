@@ -27,10 +27,10 @@ Amount PositionManager::combined_pnl_usdc(const signals::SharedState& ss) const 
     else
         poly_exit = 1.0 - ss.poly_best_ask.load(std::memory_order_relaxed);
 
-    double poly_pnl    = (poly_exit - data_.entry_price_poly) * data_.shares;
-    double binance_pnl = (data_.hedge_entry_btc - ss.btc_mid.load(std::memory_order_relaxed))
-                       * data_.hedge_qty_btc;
-    return Amount::from_double(poly_pnl + binance_pnl);
+    double poly_pnl     = (poly_exit - data_.entry_price_poly) * data_.shares;
+    double coinbase_pnl = (data_.hedge_entry_btc - ss.btc_mid.load(std::memory_order_relaxed))
+                        * data_.hedge_qty_btc;
+    return Amount::from_double(poly_pnl + coinbase_pnl);
 }
 
 PositionManager::ExitReason PositionManager::evaluate(

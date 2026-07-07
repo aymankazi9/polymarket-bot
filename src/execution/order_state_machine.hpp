@@ -1,6 +1,6 @@
 #pragma once
 #include "clob_client.hpp"
-#include "binance_client.hpp"
+#include "coinbase_client.hpp"
 #include "taker_arm.hpp"
 #include "maker_arm.hpp"
 #include "position_manager.hpp"
@@ -46,8 +46,8 @@ struct OSMConfig {
     bool         is_above;      // true → YES wins if BTC > strike
 
     // REST endpoints (defaults point at Polymarket / Binance mainnet)
-    std::string clob_base_url    = "https://clob.polymarket.com";
-    std::string binance_base_url = "https://fapi.binance.com";
+    std::string clob_base_url     = "https://clob.polymarket.com";
+    std::string coinbase_base_url = "https://api.coinbase.com";
 
     // Maker arm parameters
     double maker_half_spread_usdc = 0.005;  // 0.5¢ as price fraction
@@ -103,9 +103,9 @@ private:
     OSMConfig                 config_;
 
     // Owned sub-components
-    ClobClient    clob_;
-    BinanceClient binance_;
-    TakerArm      taker_arm_;
+    ClobClient     clob_;
+    CoinbaseClient coinbase_;
+    TakerArm       taker_arm_;
     MakerArm      maker_arm_;
     PositionManager pos_mgr_;
 
@@ -121,7 +121,7 @@ private:
 
     // Closing leg tracking
     std::string close_poly_order_id_;
-    std::string close_binance_order_id_;
+    std::string close_coinbase_order_id_;
 };
 
 } // namespace execution

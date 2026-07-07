@@ -61,7 +61,7 @@ void RiskWatchdog::evaluate() noexcept {
     // Soft guardrail: set kill_switch if bankroll collapses below floor
     double bankroll = ss_.bankroll_usdc.load(std::memory_order_relaxed);
     if (bankroll > 0.0 &&
-        bankroll < initial_bankroll_ * constants::BINANCE_MARGIN_FLOOR_FRACTION) {
+        bankroll < initial_bankroll_ * constants::CEX_MARGIN_FLOOR_FRACTION) {
         trip("bankroll below margin floor");
     }
 }

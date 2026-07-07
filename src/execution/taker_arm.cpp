@@ -13,13 +13,13 @@ namespace execution {
 using namespace std::chrono;
 
 TakerArm::TakerArm(ClobClient&                 clob,
-                    BinanceClient&              binance,
+                    CoinbaseClient&             coinbase,
                     const wallet::KeyManager&   km,
                     const wallet::ClobAuth&     auth,
                     wallet::NonceManager&       nonce_mgr,
-                    signals::SharedState&        ss,
+                    signals::SharedState&       ss,
                     TakerConfig                 config)
-    : clob_(clob), binance_(binance), km_(km), auth_(auth)
+    : clob_(clob), coinbase_(coinbase), km_(km), auth_(auth)
     , nonce_mgr_(nonce_mgr), ss_(ss), config_(std::move(config))
 {}
 
@@ -47,7 +47,7 @@ TakerResult TakerArm::fire(Amount bankroll,
 
     // Hedge: short BTC perp (bot is long YES = long BTC direction on above markets)
     double hedge_qty = risk::hedge_btc_qty(usdc_size, btc_mid, bankroll);
-    if (hedge_qty < 0.001) return TakerResult::SKIPPED;  // below Binance minimum
+    if (hedge_qty < 0.001) return TakerResult::SKIPPED;  // below minimum order size
 
     // Build Polymarket IOC order
     double poly_ask = ss_.poly_best_ask.load(std::memory_order_relaxed);
@@ -88,46 +88,46 @@ TakerResult TakerArm::fire(Amount bankroll,
         return TakerResult::ERROR;
     }
 
-    // ---- Fire Binance hedge leg (as close to simultaneous as possible) ----
+    // ---- Fire Coinbase hedge leg (as close to simultaneous as possible) ----
     // is_above=true → long YES = long BTC risk → hedge with SHORT BTC perp
     std::string hedge_side = config_.is_above ? "SELL" : "BUY";
     double hedge_price = config_.is_above
         ? btc_mid * (1.0 - 0.001)  // sell slightly below mid for IOC fill
         : btc_mid * (1.0 + 0.001);
 
-    auto bn_result = binance_.submit_order(hedge_side, hedge_qty, hedge_price);
+    auto cb_result = coinbase_.submit_order(hedge_side, hedge_qty, hedge_price);
 
     // ---- Handle leg outcomes ----
-    bool poly_filled    = !poly_result.order_id.empty();
-    bool binance_filled = bn_result.success && bn_result.executed_qty >= hedge_qty * 0.99;
+    bool poly_filled     = !poly_result.order_id.empty();
+    bool coinbase_filled = cb_result.success && cb_result.executed_qty >= hedge_qty * 0.99;
 
-    if (!poly_filled && !binance_filled) {
+    if (!poly_filled && !coinbase_filled) {
         return TakerResult::LEG_FAIL;
     }
 
-    if (poly_filled && !binance_filled) {
+    if (poly_filled && !coinbase_filled) {
         // Unwind poly leg with a market sell (cancel IOC order has already expired; post SELL)
-        std::fprintf(stderr, "taker: legging! poly filled but binance failed. unwinding poly.\n");
+        std::fprintf(stderr, "taker: legging! poly filled but coinbase failed. unwinding poly.\n");
         wallet::Order unwind = order;
-        unwind.salt      = wallet::random_salt();
-        unwind.side      = 1;  // SELL
+        unwind.salt        = wallet::random_salt();
+        unwind.side        = 1;  // SELL
         unwind.makerAmount = order.takerAmount;
         unwind.takerAmount = order.makerAmount;
-        unwind.nonce     = wallet::u64_to_uint256(nonce_mgr_.next());
-        unwind.expiration = wallet::u64_to_uint256(
-                                static_cast<uint64_t>(now_s + 5));
+        unwind.nonce       = wallet::u64_to_uint256(nonce_mgr_.next());
+        unwind.expiration  = wallet::u64_to_uint256(
+                                 static_cast<uint64_t>(now_s + 5));
         auto ud = wallet::hash_order(unwind);
         auto us = km_.sign(ud);
         clob_.submit_order(unwind, us, auth_, "FOK");
         return TakerResult::LEG_FAIL;
     }
 
-    if (!poly_filled && binance_filled) {
-        std::fprintf(stderr, "taker: legging! binance filled but poly failed. unwinding binance.\n");
-        binance_.cancel_order(bn_result.order_id);
-        // Close binance with a market order in opposite direction
+    if (!poly_filled && coinbase_filled) {
+        std::fprintf(stderr, "taker: legging! coinbase filled but poly failed. unwinding coinbase.\n");
+        coinbase_.cancel_order(cb_result.order_id);
+        // Close coinbase hedge with a market order in the opposite direction
         std::string close_side = config_.is_above ? "BUY" : "SELL";
-        binance_.submit_order(close_side, bn_result.executed_qty, btc_mid);
+        coinbase_.submit_order(close_side, cb_result.executed_qty, 0.0);  // 0.0 → market IOC
         return TakerResult::LEG_FAIL;
     }
 
@@ -138,11 +138,11 @@ TakerResult TakerArm::fire(Amount bankroll,
 
     entry_out.entry_price_poly   = fill_price_poly;
     entry_out.shares             = static_cast<double>(taker_raw) / 1e6;
-    entry_out.hedge_entry_btc    = bn_result.avg_price > 0 ? bn_result.avg_price : btc_mid;
-    entry_out.hedge_qty_btc      = bn_result.executed_qty;
+    entry_out.hedge_entry_btc    = cb_result.avg_price > 0 ? cb_result.avg_price : btc_mid;
+    entry_out.hedge_qty_btc      = cb_result.executed_qty;
     entry_out.initial_edge_value = Amount::from_double((p_true - p_market) * usdc_size.to_double());
     entry_out.poly_order_id      = poly_result.order_id;
-    entry_out.binance_order_id   = bn_result.order_id;
+    entry_out.coinbase_order_id  = cb_result.order_id;
     entry_out.is_yes_long        = true;
 
     last_entry_ = steady_clock::now();

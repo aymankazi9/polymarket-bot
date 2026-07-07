@@ -180,8 +180,8 @@ void KeyManager::load(std::string_view key_file_path) {
         throw std::runtime_error(std::string("key_manager: JSON parse error: ") + e.what());
     }
 
-    credentials_.binance_api_key = j.at("binance_api_key").get<std::string>();
-    credentials_.binance_secret  = j.at("binance_secret").get<std::string>();
+    credentials_.coinbase_key_name   = j.at("coinbase_key_name").get<std::string>();
+    credentials_.coinbase_key_secret = j.at("coinbase_key_secret").get<std::string>();
 
     std::string privkey_hex = j.at("private_key").get<std::string>();
 
@@ -289,12 +289,12 @@ void KeyManager::wipe() noexcept {
         secp256k1_context_destroy(ctx_);
         ctx_ = nullptr;
     }
-    if (!credentials_.binance_api_key.empty())
-        OPENSSL_cleanse(credentials_.binance_api_key.data(),
-                        credentials_.binance_api_key.size());
-    if (!credentials_.binance_secret.empty())
-        OPENSSL_cleanse(credentials_.binance_secret.data(),
-                        credentials_.binance_secret.size());
+    if (!credentials_.coinbase_key_name.empty())
+        OPENSSL_cleanse(credentials_.coinbase_key_name.data(),
+                        credentials_.coinbase_key_name.size());
+    if (!credentials_.coinbase_key_secret.empty())
+        OPENSSL_cleanse(credentials_.coinbase_key_secret.data(),
+                        credentials_.coinbase_key_secret.size());
     loaded_ = false;
 }
 

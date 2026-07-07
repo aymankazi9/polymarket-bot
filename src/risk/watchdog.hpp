@@ -21,7 +21,7 @@
 // logs reason to stderr.  Manual reset required.
 //
 // Guardrail (not a circuit breaker):
-//   margin_insufficient flag is set when bankroll < initial_bankroll * BINANCE_MARGIN_FLOOR_FRACTION.
+//   kill_switch is set when bankroll < initial_bankroll * CEX_MARGIN_FLOOR_FRACTION.
 //   Thread 3 checks this before opening new taker positions.
 
 namespace risk {

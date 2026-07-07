@@ -8,8 +8,8 @@
 // exit conditions on every evaluation tick.  CONTEXT.md §5.4.
 //
 // PnL is computed in USDC across both legs:
-//   poly_pnl   = (current_exit_price - entry_price_poly) * shares
-//   binance_pnl = (hedge_entry_btc   - current_btc_mid)  * hedge_qty_btc
+//   poly_pnl    = (current_exit_price - entry_price_poly) * shares
+//   coinbase_pnl = (hedge_entry_btc   - current_btc_mid)  * hedge_qty_btc
 //
 // Exit conditions (evaluated in priority order):
 //   1. Hard stop:     combined_pnl < HARD_STOP_MULTIPLE * initial_edge_value
@@ -30,7 +30,7 @@ public:
         double      hedge_qty_btc;      // BTC perp quantity (not monetary)
         Amount      initial_edge_value; // edge × usdc_spent at entry (USDC)
         std::string poly_order_id;
-        std::string binance_order_id;
+        std::string coinbase_order_id;
         bool        is_yes_long;        // true = long YES, false = long NO
 
         EntryData() : entry_price_poly(0.0), shares(0.0), hedge_entry_btc(0.0),

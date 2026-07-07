@@ -19,12 +19,19 @@ constexpr int         RPC_TIMEOUT_MS = 3000;  // retry on fallback after 3s
 
 // ---------------------------------------------------------------------------
 // CEX instrument  (CONTEXT_ADDENDUM A6)
-// BTCUSDC perpetual futures, USDC-margined.
-// NOT BTCUSDT (USDT basis risk) and NOT BTCUSD (coin-margined).
+// Coinbase Advanced Trade — US CFTC-regulated nano BTC perpetual futures, USDC-margined.
+// Hedge orders: POST https://api.coinbase.com/api/v3/brokerage/orders
+//
+// IMPORTANT: verify COINBASE_HEDGE_SYMBOL via authenticated
+//   GET /api/v3/brokerage/cfm/products
+// before going live.  "BTC-PERP" is the expected product_id for the US CFM
+// nano Bitcoin perpetual; "BTC-PERP-INTX" is the International Exchange product
+// (non-CFTC, non-US) and must NOT be used.
 // ---------------------------------------------------------------------------
-inline constexpr char BINANCE_HEDGE_SYMBOL[] = "BTCUSDC";
-inline constexpr char BINANCE_FUTURES_BASE[] = "https://fapi.binance.com";
-inline constexpr char BINANCE_FUTURES_WS[]   = "wss://fstream.binance.com";
+inline constexpr char COINBASE_HEDGE_SYMBOL[] = "BTC-PERP";  // TODO: verify
+inline constexpr char COINBASE_REST_BASE[]    = "https://api.coinbase.com";
+// Market data feed remains on Binance WebSocket (deeper BTC book, better signal).
+inline constexpr char BINANCE_FUTURES_WS[]    = "wss://fstream.binance.com";
 
 // ---------------------------------------------------------------------------
 // Bayesian signal engine
@@ -95,7 +102,7 @@ constexpr uint32_t MAKER_FEE_RATE_BPS = 0;
 constexpr double HARD_STOP_MULTIPLE       = -1.5;  // close if PnL < -1.5 × initial_edge_value
 constexpr double TRAILING_PROFIT_TRIGGER  =  0.5;  // trailing stop activates at +0.5 × initial_edge
 constexpr double TRAILING_STOP_FRACTION   =  0.30; // retrace 30% from peak → exit
-constexpr double HEDGE_CLOSE_BEFORE_EXPIRY_S = 30.0; // close Binance hedge at T-30s before resolution
+constexpr double HEDGE_CLOSE_BEFORE_EXPIRY_S = 30.0; // close Coinbase hedge at T-30s before resolution
 
 // ---------------------------------------------------------------------------
 // Feed fault tiers
@@ -121,7 +128,7 @@ constexpr double CB_NAV_DRAWDOWN_WINDOW_S   = 3600.0;  // 1 hour
 // ---------------------------------------------------------------------------
 // Risk guardrails  (always active; not circuit breakers)
 // ---------------------------------------------------------------------------
-constexpr double BINANCE_MARGIN_FLOOR_FRACTION = 0.5; // halt new entries if margin < 50% of initial
+constexpr double CEX_MARGIN_FLOOR_FRACTION = 0.5; // halt new entries if bankroll < 50% of initial
 
 // ---------------------------------------------------------------------------
 // Infrastructure

@@ -20,10 +20,10 @@ OrderStateMachine::OrderStateMachine(signals::SharedState&      ss,
     : ss_(ss), km_(km), auth_(auth), nonce_mgr_(nonce_mgr)
     , config_(std::move(config))
     , clob_(config_.clob_base_url)
-    , binance_(km.credentials().binance_api_key,
-               km.credentials().binance_secret,
-               config_.binance_base_url)
-    , taker_arm_(clob_, binance_, km_, auth_, nonce_mgr_, ss_,
+    , coinbase_(km.credentials().coinbase_key_name,
+                km.credentials().coinbase_key_secret,
+                config_.coinbase_base_url)
+    , taker_arm_(clob_, coinbase_, km_, auth_, nonce_mgr_, ss_,
                  TakerConfig{config_.token_id, config_.strike_price, config_.is_above})
     , maker_arm_(clob_, km_, auth_, nonce_mgr_, ss_,
                  MakerConfig{config_.token_id,
@@ -273,7 +273,7 @@ void OrderStateMachine::handle_closing() noexcept {
             ss_.open_position_count.fetch_sub(1, std::memory_order_relaxed);
             pos_mgr_.close();
             close_poly_order_id_.clear();
-            close_binance_order_id_.clear();
+            close_coinbase_order_id_.clear();
             transition(OSMState::IDLE);
         }
     } else {
@@ -328,12 +328,12 @@ void OrderStateMachine::close_position(bool market_order) noexcept {
         close_poly_order_id_ = result.order_id;
     }
 
-    // Close Binance hedge (skip if late fill — hedge_qty_btc was zeroed)
+    // Close Coinbase hedge (skip if late fill — hedge_qty_btc was zeroed)
     if (d.hedge_qty_btc >= 0.001) {
         std::string close_side = config_.is_above ? "BUY" : "SELL";
         double btc_price = ss_.btc_mid.load(std::memory_order_relaxed);
-        auto bn = binance_.submit_order(close_side, d.hedge_qty_btc, btc_price);
-        close_binance_order_id_ = bn.order_id;
+        auto cb = coinbase_.submit_order(close_side, d.hedge_qty_btc, btc_price);
+        close_coinbase_order_id_ = cb.order_id;
     }
 
     transition(OSMState::CLOSING);
