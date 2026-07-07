@@ -20,7 +20,7 @@ OrderStateMachine::OrderStateMachine(signals::SharedState&      ss,
     : ss_(ss), km_(km), auth_(auth), nonce_mgr_(nonce_mgr)
     , config_(std::move(config))
     , clob_(config_.clob_base_url)
-    , coinbase_(km.credentials().coinbase_key_name,
+    , coinbase_(km.credentials().coinbase_key_id,
                 km.credentials().coinbase_key_secret,
                 config_.coinbase_base_url)
     , taker_arm_(clob_, coinbase_, km_, auth_, nonce_mgr_, ss_,
@@ -237,7 +237,7 @@ void OrderStateMachine::handle_maker_quoted() noexcept {
 // Exit immediately at break-even if the book allows; otherwise hold to resolution.
 void OrderStateMachine::handle_late_fill(const PositionManager::EntryData& entry) noexcept {
     PositionManager::EntryData unhedged = entry;
-    unhedged.hedge_qty_btc = 0.0;  // no Binance hedge for late fills
+    unhedged.hedge_qty_btc = 0.0;  // no Coinbase hedge for late fills
 
     pos_mgr_.open(unhedged);
     ss_.total_exposure_usdc.fetch_add(

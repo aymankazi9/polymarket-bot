@@ -28,7 +28,7 @@ constexpr int         RPC_TIMEOUT_MS = 3000;  // retry on fallback after 3s
 // nano Bitcoin perpetual; "BTC-PERP-INTX" is the International Exchange product
 // (non-CFTC, non-US) and must NOT be used.
 // ---------------------------------------------------------------------------
-inline constexpr char COINBASE_HEDGE_SYMBOL[] = "BTC-PERP";  // TODO: verify
+inline constexpr char COINBASE_HEDGE_SYMBOL[] = "BIP-20DEC30-CDE";  // verified!
 inline constexpr char COINBASE_REST_BASE[]    = "https://api.coinbase.com";
 // Market data feed remains on Binance WebSocket (deeper BTC book, better signal).
 inline constexpr char BINANCE_FUTURES_WS[]    = "wss://fstream.binance.com";

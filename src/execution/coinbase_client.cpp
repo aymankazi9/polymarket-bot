@@ -12,7 +12,6 @@
 
 #include <openssl/bio.h>
 #include <openssl/evp.h>
-#include <openssl/pem.h>
 #include <openssl/rand.h>
 
 #include <curl/curl.h>
@@ -89,13 +88,37 @@ static std::string random_client_oid() {
     return out;
 }
 
+// Decode standard base64 (with or without padding/newlines) → raw bytes.
+// Uses OpenSSL BIO to handle both padded and no-newline variants.
+static std::vector<uint8_t> b64_decode(const std::string& b64_in) {
+    // Strip all whitespace so BIO_FLAGS_BASE64_NO_NL works regardless of line breaks.
+    std::string stripped;
+    stripped.reserve(b64_in.size());
+    for (unsigned char c : b64_in) {
+        if (!std::isspace(c)) stripped += static_cast<char>(c);
+    }
+
+    BIO* bmem = BIO_new_mem_buf(stripped.data(), static_cast<int>(stripped.size()));
+    BIO* b64  = BIO_new(BIO_f_base64());
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+    BIO* chain = BIO_push(b64, bmem);  // b64 owns bmem after push
+
+    std::vector<uint8_t> out((stripped.size() * 3) / 4 + 4);
+    int n = BIO_read(chain, out.data(), static_cast<int>(out.size()));
+    BIO_free_all(chain);
+
+    if (n <= 0) return {};
+    out.resize(static_cast<size_t>(n));
+    return out;
+}
+
 } // anonymous namespace
 
-CoinbaseClient::CoinbaseClient(std::string key_name,
-                                std::string key_secret_pem,
+CoinbaseClient::CoinbaseClient(std::string key_id,
+                                std::string key_secret,
                                 std::string base_url)
-    : key_name_(std::move(key_name))
-    , key_secret_pem_(std::move(key_secret_pem))
+    : key_id_(std::move(key_id))
+    , key_secret_(std::move(key_secret))
     , base_url_(std::move(base_url))
 {}
 
@@ -109,25 +132,21 @@ std::string CoinbaseClient::build_jwt(const std::string& method,
     int64_t now = duration_cast<seconds>(
         system_clock::now().time_since_epoch()).count();
 
-    // Load private key from PKCS8 PEM (-----BEGIN PRIVATE KEY-----)
-    BIO* bio = BIO_new_mem_buf(key_secret_pem_.data(),
-                                static_cast<int>(key_secret_pem_.size()));
-    if (!bio)
-        throw std::runtime_error("coinbase_client: BIO_new_mem_buf failed");
-    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
-    BIO_free(bio);
-    if (!pkey)
-        throw std::runtime_error("coinbase_client: failed to load Ed25519 PEM key — "
-                                  "key must be PKCS8 PEM (-----BEGIN PRIVATE KEY-----)");
-
-    // Only Ed25519 is supported; reject EC keys (ES256 needs DER→raw-rs conversion).
-    int key_type = EVP_PKEY_base_id(pkey);
-    if (key_type != EVP_PKEY_ED25519) {
-        EVP_PKEY_free(pkey);
+    // Decode raw base64 key → 64 bytes (Ed25519 seed || pubkey).
+    // Only the first 32 bytes (the seed) are needed to construct the signing key.
+    auto key_bytes = b64_decode(key_secret_);
+    if (key_bytes.size() < 32)
         throw std::runtime_error(
-            "coinbase_client: unsupported key type — only Ed25519 keys are "
-            "supported. Generate a new key at https://cloud.coinbase.com/access/api");
-    }
+            "coinbase_client: key secret too short after base64 decode — "
+            "expected ≥32 bytes, got " + std::to_string(key_bytes.size()));
+
+    EVP_PKEY* pkey = EVP_PKEY_new_raw_private_key(
+        EVP_PKEY_ED25519, nullptr, key_bytes.data(), 32);
+    OPENSSL_cleanse(key_bytes.data(), key_bytes.size());  // wipe seed immediately
+    if (!pkey)
+        throw std::runtime_error(
+            "coinbase_client: EVP_PKEY_new_raw_private_key failed — "
+            "verify the key secret is a valid base64-encoded Ed25519 key");
 
     // URI claim: "METHOD api.coinbase.com/path" (no scheme, no port)
     std::string uri = method + " api.coinbase.com" + path;
@@ -135,12 +154,13 @@ std::string CoinbaseClient::build_jwt(const std::string& method,
     nlohmann::json header_j = {
         {"alg",   "EdDSA"},
         {"typ",   "JWT"},
-        {"kid",   key_name_},
+        {"kid",   key_id_},
         {"nonce", hex_nonce_16()}
     };
     nlohmann::json payload_j = {
-        {"sub", key_name_},
+        {"sub", key_id_},
         {"iss", "cdp"},
+        {"aud", nlohmann::json::array({"cdp_service"})},
         {"nbf", now},
         {"exp", now + 120},
         {"uri", uri}

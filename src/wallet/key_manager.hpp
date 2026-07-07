@@ -27,19 +27,19 @@ namespace wallet {
 // Plaintext (JSON):
 //   {
 //     "private_key":         "0x<64 hex chars>",
-//     "coinbase_key_name":   "organizations/{org_id}/apiKeys/{key_id}",
-//     "coinbase_key_secret": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+//     "coinbase_key_id":     "<flat UUID key ID from Coinbase Developer Platform>",
+//     "coinbase_key_secret": "<base64-encoded raw 64-byte Ed25519 key (seed || pubkey)>"
 //   }
-// coinbase_key_secret is the Ed25519 private key in PKCS8 PEM format,
-// exactly as exported by the Coinbase CDP key generator.
+// coinbase_key_secret is the raw base64 64-byte key exactly as shown on the
+// Coinbase CDP key detail page (flat Secret API Key format, NOT PEM).
 //
 // PBKDF2 parameters: HMAC-SHA256, 100 000 iterations, 32-byte output.
 
 class KeyManager {
 public:
     struct Credentials {
-        std::string coinbase_key_name;    // "organizations/{org_id}/apiKeys/{key_id}"
-        std::string coinbase_key_secret;  // Ed25519 PKCS8 PEM
+        std::string coinbase_key_id;      // flat UUID key ID from Coinbase Developer Platform
+        std::string coinbase_key_secret;  // base64-encoded raw 64-byte Ed25519 key (seed || pubkey)
         std::array<uint8_t, 20> wallet_address{};  // Ethereum address derived from the pubkey
     };
 

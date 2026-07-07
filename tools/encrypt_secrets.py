@@ -6,8 +6,8 @@ Usage:
 
 Prompts for:
     1. Ethereum private key (0x-prefixed hex, 64 chars after 0x)
-    2. Coinbase CDP API key name  — "organizations/{org_id}/apiKeys/{key_id}"
-    3. Coinbase CDP API key secret — Ed25519 PKCS8 PEM, paste then blank line
+    2. Coinbase CDP API key ID  — flat UUID shown on the key detail page
+    3. Coinbase CDP API key secret — base64-encoded raw 64-byte Ed25519 key
     4. Encryption passphrase (hidden, confirmed twice)
 
 Output binary layout (matches KeyManager::load):
@@ -21,6 +21,7 @@ PBKDF2 parameters: HMAC-SHA256, 100 000 iterations, 32-byte output.
 Dependencies:
     pip install cryptography
 """
+import base64
 import getpass
 import json
 import os
@@ -54,38 +55,35 @@ def main() -> None:
         print("ERROR: Not valid hex after '0x'.", file=sys.stderr)
         sys.exit(1)
 
-    # ── Coinbase CDP key name ───────────────────────────────────────────────
+    # ── Coinbase CDP key ID ─────────────────────────────────────────────────
     print()
-    print("Coinbase CDP API key name format: organizations/{org_id}/apiKeys/{key_id}")
-    cb_key_name = input("Coinbase CDP API key name: ").strip()
-    if not cb_key_name.startswith("organizations/") or "/apiKeys/" not in cb_key_name:
-        print("WARNING: Key name doesn't match expected format "
-              "'organizations/{org_id}/apiKeys/{key_id}'. Proceeding anyway.")
-
-    # ── Coinbase CDP key secret (Ed25519 PEM) ───────────────────────────────
-    print()
-    print("Paste your Coinbase CDP Ed25519 private key PEM below.")
-    print("It should start with: -----BEGIN PRIVATE KEY-----")
-    print("End input with a blank line (or Ctrl+D):")
-    pem_lines: list[str] = []
-    try:
-        while True:
-            line = input()
-            if line == "" and any("BEGIN" in l for l in pem_lines):
-                break
-            pem_lines.append(line)
-    except EOFError:
-        pass
-
-    cb_key_secret = "\n".join(pem_lines)
-    if not cb_key_secret.endswith("\n"):
-        cb_key_secret += "\n"
-
-    if "BEGIN PRIVATE KEY" not in cb_key_secret:
-        print("ERROR: PEM must contain '-----BEGIN PRIVATE KEY-----'. "
-              "Generate a key at https://cloud.coinbase.com/access/api",
-              file=sys.stderr)
+    print("Coinbase CDP API key ID: the flat identifier shown on the key detail page")
+    print("(not an org-scoped path — just the UUID or short identifier).")
+    cb_key_id = input("Coinbase CDP API key ID: ").strip()
+    if not cb_key_id:
+        print("ERROR: Key ID cannot be empty.", file=sys.stderr)
         sys.exit(1)
+
+    # ── Coinbase CDP key secret (raw base64 Ed25519) ────────────────────────
+    print()
+    print("Coinbase CDP API key secret: the base64-encoded 64-byte Ed25519 key")
+    print("shown on the key detail page (seed || pubkey, standard base64, ~88 chars).")
+    cb_key_secret = input("Coinbase CDP API key secret: ").strip()
+    if not cb_key_secret:
+        print("ERROR: Key secret cannot be empty.", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate: must decode to at least 32 bytes (seed portion)
+    try:
+        raw = base64.b64decode(cb_key_secret, validate=True)
+    except Exception:
+        print("ERROR: Key secret is not valid base64.", file=sys.stderr)
+        sys.exit(1)
+    if len(raw) not in (32, 64):
+        print(f"ERROR: Key secret decoded to {len(raw)} bytes; expected 32 or 64 "
+              "(Coinbase Ed25519 keys are 64 bytes: seed + public key).", file=sys.stderr)
+        sys.exit(1)
+    del raw  # wipe decoded bytes from local scope
 
     # ── Passphrase ──────────────────────────────────────────────────────────
     print()
@@ -101,7 +99,7 @@ def main() -> None:
     # ── Build JSON plaintext ────────────────────────────────────────────────
     plaintext = json.dumps({
         "private_key":         priv_key,
-        "coinbase_key_name":   cb_key_name,
+        "coinbase_key_id":     cb_key_id,
         "coinbase_key_secret": cb_key_secret,
     }, indent=None, separators=(",", ":")).encode("utf-8")
 
