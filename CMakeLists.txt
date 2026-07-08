@@ -134,19 +134,52 @@ target_link_libraries(polymarket-bot PRIVATE
 # ---------------------------------------------------------------------------
 add_executable(bt-runner
     tools/bt_runner/main.cpp
+    src/signal/bayesian_engine.cpp
     src/signal/likelihood.cpp
     src/signal/regime.cpp
+    src/data/feed_manager.cpp
     src/data/clock_sync.cpp
+    src/execution/position_manager.cpp
 )
 
 target_include_directories(bt-runner PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(bt-runner PRIVATE
-    OpenSSL::SSL OpenSSL::Crypto pthread)
+    OpenSSL::SSL OpenSSL::Crypto
+    Boost::system Boost::coroutine Boost::context
+    nlohmann_json::nlohmann_json
+    pthread
+    $<$<BOOL:${USE_IO_URING}>:${URING_LIB}>
+)
+
+# ---------------------------------------------------------------------------
+# Tick recorder (standalone data capture tool — no wallet/execution code)
+# Connects to the same WS feeds as the live bot and writes raw Tick records
+# to disk.  Safe to run alongside a live polymarket-bot instance.
+# ---------------------------------------------------------------------------
+add_executable(tick-recorder
+    tools/tick_recorder/main.cpp
+    src/data/feed_manager.cpp
+    src/data/clock_sync.cpp
+)
+
+target_include_directories(tick-recorder PRIVATE ${CMAKE_SOURCE_DIR})
+
+target_link_libraries(tick-recorder PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Boost::system
+    Boost::coroutine
+    Boost::context
+    nlohmann_json::nlohmann_json
+    pthread
+    $<$<BOOL:${USE_IO_URING}>:${URING_LIB}>
+)
 
 # ---------------------------------------------------------------------------
 # Install targets
 # ---------------------------------------------------------------------------
 install(TARGETS polymarket-bot DESTINATION bin)
+install(TARGETS tick-recorder  DESTINATION bin)
 
 # ---------------------------------------------------------------------------
 # Summary

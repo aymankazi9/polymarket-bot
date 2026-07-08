@@ -36,8 +36,9 @@ public:
                    const data::FeedManager& feed,
                    MarketConfig             config);
 
-    void run()    noexcept;  // blocks Thread 2; loops until stop()
-    void stop()   noexcept;  // safe to call from any thread
+    void run()       noexcept;  // blocks Thread 2; loops until stop()
+    void stop()      noexcept;  // safe to call from any thread
+    void feed_tick(const data::Tick& t) noexcept;  // bt-runner: synchronous replay path
 
 private:
     void   process_tick(const data::Tick& tick)  noexcept;

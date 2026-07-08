@@ -30,6 +30,10 @@ void BayesianEngine::stop() noexcept {
     stop_flag_.store(true, std::memory_order_relaxed);
 }
 
+void BayesianEngine::feed_tick(const data::Tick& t) noexcept {
+    process_tick(t);
+}
+
 void BayesianEngine::process_tick(const data::Tick& tick) noexcept {
     using data::Source;
 
