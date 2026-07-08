@@ -266,6 +266,49 @@ HttpResult http_post(const std::string& url,
     return result;
 }
 
+HttpResult http_get(const std::string& url,
+                    const std::map<std::string, std::string>& headers) {
+    CURL* c = curl_easy_init();
+    if (!c) throw std::runtime_error("clob_auth: curl_easy_init failed");
+    struct G { CURL* c; ~G() { curl_easy_cleanup(c); } } g{c};
+
+    HttpResult result;
+    curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(c, CURLOPT_HTTPGET, 1L);
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, curl_write);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &result.body);
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+
+    struct curl_slist* hlist = nullptr;
+    for (const auto& [k, v] : headers) {
+        std::string h = k + ": " + v;
+        hlist = curl_slist_append(hlist, h.c_str());
+    }
+    curl_easy_setopt(c, CURLOPT_HTTPHEADER, hlist);
+
+    CURLcode rc = curl_easy_perform(c);
+    curl_slist_free_all(hlist);
+
+    if (rc != CURLE_OK)
+        throw std::runtime_error(
+            std::string("clob_auth: HTTP GET failed: ") + curl_easy_strerror(rc));
+
+    curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &result.status);
+    return result;
+}
+
+ClobAuth::ApiCreds parse_api_creds(const std::string& json_body) {
+    auto j = nlohmann::json::parse(json_body);
+    ClobAuth::ApiCreds c;
+    // Polymarket returns either camelCase (apiKey) or snake_case (api_key)
+    c.api_key    = j.contains("apiKey") ? j["apiKey"].get<std::string>()
+                                        : j.at("api_key").get<std::string>();
+    c.secret     = j.at("secret").get<std::string>();
+    c.passphrase = j.at("passphrase").get<std::string>();
+    return c;
+}
+
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -281,23 +324,48 @@ void ClobAuth::authenticate(const KeyManager& km, uint64_t nonce) {
 
     wallet_hex_ = address_to_hex(km.credentials().wallet_address);
 
+    // Build L1 headers once; the same signed payload is reused for both
+    // create and (if needed) derive so the timestamp/nonce stay consistent.
     auto hdrs = level1_headers(km, nonce);
 
-    auto result = http_post(host_ + "/auth/api-key", hdrs, "");
-    if (result.status != 200)
+    // Attempt 1: create a new API key.
+    auto create = http_post(host_ + "/auth/api-key", hdrs, "");
+
+    if (create.status == 200) {
+        creds_ = parse_api_creds(create.body);
+        return;
+    }
+
+    // Attempt 2: if the server returned 400, the key already exists for this
+    // address+nonce.  Retrieve the existing credentials via the derive endpoint.
+    //
+    // We do NOT fall back to derive for other status codes (401 means the
+    // signature is wrong, 5xx means a server fault) — derive would fail for
+    // the same reason and would just waste another round-trip.
+    //
+    // We intentionally do not string-match the error body here: Polymarket has
+    // not documented a stable error code for "key already exists", so 400 is
+    // the reliable signal.  The raw body is preserved in the fatal error
+    // message below for post-mortem diagnosis if both attempts fail.
+    if (create.status != 400) {
         throw std::runtime_error(
             "clob_auth: /auth/api-key returned HTTP " +
-            std::to_string(result.status) + ": " + result.body);
+            std::to_string(create.status) + ": " + create.body);
+    }
 
-    nlohmann::json j = nlohmann::json::parse(result.body);
+    auto derive = http_get(host_ + "/auth/derive-api-key", hdrs);
 
-    // Accept either camelCase (apiKey) or snake_case (api_key)
-    ApiCreds c;
-    c.api_key    = j.contains("apiKey")    ? j["apiKey"].get<std::string>()
-                                           : j.at("api_key").get<std::string>();
-    c.secret     = j.at("secret").get<std::string>();
-    c.passphrase = j.at("passphrase").get<std::string>();
-    creds_       = std::move(c);
+    if (derive.status == 200) {
+        creds_ = parse_api_creds(derive.body);
+        return;
+    }
+
+    throw std::runtime_error(
+        "clob_auth: failed to create or derive API key — "
+        "create HTTP " + std::to_string(create.status) +
+        " body=(" + create.body + "); "
+        "derive HTTP " + std::to_string(derive.status) +
+        " body=(" + derive.body + ")");
 }
 
 std::map<std::string, std::string> ClobAuth::level1_headers(
